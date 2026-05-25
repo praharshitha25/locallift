@@ -65,7 +65,7 @@ const Landing = () => {
                 <div className="flex items-center gap-4">
                   <Package className="text-[#F4A261]" />
                   <div>
-                    <h3 className="font-semibold">Sarah’s Resin Coasters</h3>
+                    <h3 className="font-semibold">Sarah's Resin Coasters</h3>
                     <p className="text-sm text-gray-500">
                       Delivered to Cornerstone Gifts
                     </p>
@@ -105,7 +105,7 @@ const Landing = () => {
                 <div className="flex items-center gap-4">
                   <Video className="text-[#52B788]" />
                   <div>
-                    <h3 className="font-semibold">Alex’s Promo Reel</h3>
+                    <h3 className="font-semibold">Alex's Promo Reel</h3>
                     <p className="text-sm text-gray-500">
                       Instagram reach boosted locally
                     </p>
@@ -208,7 +208,7 @@ const Landing = () => {
 
               <p className="text-gray-600">
                 Makers, retailers, and creators connect within
-                a 5–10 mile local ecosystem.
+                a 5-10 mile local ecosystem.
               </p>
             </div>
 
@@ -261,7 +261,7 @@ const Landing = () => {
 
         <div className="bg-white rounded-3xl border shadow-sm p-10">
 
-          <div className="grid md:grid-cols-3 gap-10 items-center">
+          <div className="grid md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-6 items-center">
 
             <div className="text-center">
               <div className="w-24 h-24 rounded-full bg-[#FFF1E6] mx-auto mb-5 flex items-center justify-center">
@@ -277,6 +277,8 @@ const Landing = () => {
               </p>
             </div>
 
+            <ArrowRight className="hidden md:block text-[#2D6A4F]" size={30} />
+
             <div className="text-center">
               <div className="w-24 h-24 rounded-full bg-[#E8F5EC] mx-auto mb-5 flex items-center justify-center">
                 <Store className="text-[#2D6A4F]" size={38} />
@@ -290,6 +292,8 @@ const Landing = () => {
                 Neighborhood Shopkeeper
               </p>
             </div>
+
+            <ArrowRight className="hidden md:block text-[#2D6A4F]" size={30} />
 
             <div className="text-center">
               <div className="w-24 h-24 rounded-full bg-[#EAFBF3] mx-auto mb-5 flex items-center justify-center">
@@ -305,6 +309,16 @@ const Landing = () => {
               </p>
             </div>
 
+          </div>
+
+          <div className="mt-8 flex justify-center">
+            <div className="inline-flex items-center gap-3 rounded-full border bg-[#FAFAF8] px-5 py-3 text-sm font-medium text-[#2D6A4F]">
+              <span>Sarah</span>
+              <ArrowRight size={16} />
+              <span>Mr. Davis</span>
+              <ArrowRight size={16} />
+              <span>Alex</span>
+            </div>
           </div>
         </div>
       </section>

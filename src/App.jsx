@@ -7,6 +7,7 @@ import Login from "./pages/auth/Login";
 import MakerDashboard from "./pages/maker/MakerDashboard";
 import ShopDashboard from "./pages/shopkeeper/ShopDashboard";
 import FreelancerDashboard from "./pages/freelancer/FreelancerDashboard";
+import Settlement from "./pages/Settlement";
 
 function App() {
   return (
@@ -23,6 +24,8 @@ function App() {
         <Route path="/shopkeeper" element={<ShopDashboard />} />
 
         <Route path="/freelancer" element={<FreelancerDashboard />} />
+
+        <Route path="/settlement" element={<Settlement />} />
 
       </Routes>
 

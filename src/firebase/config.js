@@ -1,5 +1,6 @@
-import { initializeApp } from "firebase/app";
-import { getAnalytics } from "firebase/analytics";
+import { initializeApp } from "firebase/app"
+import { getFirestore } from "firebase/firestore"
+import { getAuth } from "firebase/auth"
 
 const firebaseConfig = {
   apiKey: "AIzaSyASIv5ZM0YfY0RlTxJDeGrgQ682EwEAMhg",
@@ -7,14 +8,11 @@ const firebaseConfig = {
   projectId: "locallift-web",
   storageBucket: "locallift-web.firebasestorage.app",
   messagingSenderId: "994791725220",
-  appId: "1:994791725220:web:6570efe72d8676233fee31",
-  measurementId: "G-PHRPGM090S"
-};
+  appId: "1:994791725220:web:6570efe72d8676233fee31"
+}
 
 const app = initializeApp(firebaseConfig);
 
-getAnalytics(app);
-
-console.log("Firebase Connected");
-
+export const db = getFirestore(app)
+export const auth = getAuth(app)
 export default app;
