@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { X } from "lucide-react";
 
 const LogSaleModal = ({ item, onClose, onConfirm }) => {
     const [quantitySold, setQuantitySold] = useState("");
@@ -44,16 +45,22 @@ const LogSaleModal = ({ item, onClose, onConfirm }) => {
             <div className="bg-white rounded-[12px] shadow-lg w-full max-w-lg">
                 <div className="border-b border-gray-200 p-6 flex items-center justify-between">
                     <h2 className="text-xl font-bold text-gray-900">Log Sale</h2>
-                    <button type="button" onClick={onClose} className="text-2xl text-gray-500 hover:text-gray-700">x</button>
+                    <button type="button" onClick={onClose} className="text-gray-500 hover:text-gray-700" aria-label="Close"><X size={24} /></button>
                 </div>
 
                 <form onSubmit={handleSubmit} className="p-6 space-y-5">
                     <div className="flex gap-4">
-                        <img
-                            src={item.product?.image}
-                            alt={item.product?.name || "Product"}
-                            className="w-24 h-24 rounded-lg object-cover bg-gray-100"
-                        />
+                        {item.product?.imageUrl || item.product?.image ? (
+                            <img
+                                src={item.product.imageUrl || item.product.image}
+                                alt={item.product?.name || "Product"}
+                                className="w-24 h-24 rounded-lg object-cover bg-gray-100"
+                            />
+                        ) : (
+                            <div className="w-24 h-24 rounded-lg bg-gray-100 flex items-center justify-center text-xs text-gray-500 text-center">
+                                No image
+                            </div>
+                        )}
                         <div>
                             <p className="text-sm text-gray-500">Product</p>
                             <p className="font-bold text-gray-900">{item.product?.name || "Unknown Product"}</p>

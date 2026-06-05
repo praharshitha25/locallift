@@ -23,8 +23,8 @@ const SidebarNav = ({ activeSection, onSectionChange, maker }) => {
                             <button
                                 onClick={() => onSectionChange(item.id)}
                                 className={`w-full text-left px-3 sm:px-4 py-3 rounded-lg transition text-sm font-medium ${activeSection === item.id
-                                        ? "bg-[#2D6A4F] text-white"
-                                        : "text-gray-700 hover:bg-gray-100"
+                                    ? "bg-[#2D6A4F] text-white"
+                                    : "text-gray-700 hover:bg-gray-100"
                                     }`}
                             >
                                 <span className="mr-2">{item.icon}</span>
@@ -39,7 +39,7 @@ const SidebarNav = ({ activeSection, onSectionChange, maker }) => {
             <div className="bg-white rounded-[12px] border border-gray-200 p-4">
                 <div className="flex items-center gap-3 mb-4">
                     <img
-                        src={maker.photo}
+                        src={maker.photoUrl}
                         alt={maker.name}
                         className="w-12 h-12 rounded-full"
                     />

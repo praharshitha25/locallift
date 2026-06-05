@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import { X } from "lucide-react";
 import { Link } from "react-router-dom";
-import { addDoc, collection, onSnapshot, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, doc, serverTimestamp, updateDoc, where } from "firebase/firestore";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import Navbar from "../../components/Navbar";
 import { db } from "../../firebase/config";
-import { freelancerGigs, freelancers, portfolioItems } from "../../data/seedData";
+import { useAuth } from "../../auth/AuthContext";
+import { emptyConstraints, useCollection } from "../../firebase/firestoreHooks";
+import { uploadToCloudinary } from "../../lib/cloudinary";
 
 const completedGigs = [
     { id: "c1", brandName: "Cornerstone Gifts", jobType: "Instagram Reels", amountPaid: 1500, date: "2026-05-20" },
@@ -23,7 +26,16 @@ const weeklyEarnings = [
 ];
 
 const FreelancerDashboard = () => {
-    const currentFreelancer = { ...freelancers[0], name: "Alex J.", rating: 4.7 };
+    const { currentUser, userDoc } = useAuth();
+    const uid = currentUser?.uid;
+    const currentFreelancer = {
+        id: uid,
+        name: userDoc?.name || currentUser?.displayName || currentUser?.email || "Freelancer",
+        email: userDoc?.email || currentUser?.email || "",
+        location: userDoc?.location || "Kurnool",
+        photoUrl: userDoc?.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc?.name || "Freelancer")}&background=2D6A4F&color=fff`,
+        rating: userDoc?.rating || "New"
+    };
     const [activeSection, setActiveSection] = useState("dashboard");
     const [selectedGig, setSelectedGig] = useState(null);
     const [applyMessage, setApplyMessage] = useState("");
@@ -33,76 +45,38 @@ const FreelancerDashboard = () => {
     const [portfolioFile, setPortfolioFile] = useState(null);
     const [actionError, setActionError] = useState("");
     const [isSavingPortfolio, setIsSavingPortfolio] = useState(false);
+    const [portfolioPreview, setPortfolioPreview] = useState("");
+    const portfolioQuery = useMemo(() => uid ? [where("freelancerId", "==", uid)] : emptyConstraints, [uid]);
+    const myGigsQuery = useMemo(() => uid ? [where("freelancerId", "==", uid)] : emptyConstraints, [uid]);
+    const openGigsQuery = useMemo(() => uid ? [where("status", "==", "Open")] : emptyConstraints, [uid]);
 
-    const readSnapshot = (snapshot) => snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
-
-    const useCollectionFallback = (collectionName, fallbackData) => {
-        const [items, setItems] = useState(fallbackData);
-        const [loading, setLoading] = useState(true);
-        const [error, setError] = useState("");
-
-        useEffect(() => {
-            let isMounted = true;
-            const timeoutId = window.setTimeout(() => {
-                if (!isMounted) return;
-                setItems(fallbackData);
-                setLoading(false);
-                setError("Unable to connect to Firestore. Showing seed data.");
-            }, 2500);
-
-            const unsubscribe = onSnapshot(
-                collection(db, collectionName),
-                (snapshot) => {
-                    if (!isMounted) return;
-                    clearTimeout(timeoutId);
-                    const firestoreItems = readSnapshot(snapshot);
-                    setItems(firestoreItems.length > 0 ? firestoreItems : fallbackData);
-                    setLoading(false);
-                    setError("");
-                },
-                (err) => {
-                    if (!isMounted) return;
-                    clearTimeout(timeoutId);
-                    setItems(fallbackData);
-                    setLoading(false);
-                    setError(err.message);
-                }
-            );
-
-            return () => {
-                isMounted = false;
-                clearTimeout(timeoutId);
-                unsubscribe();
-            };
-        }, [collectionName, fallbackData]);
-
-        return { items, loading, error };
-    };
-
-    const { items: portfolios, loading: portfoliosLoading, error: portfoliosError } = useCollectionFallback("portfolios", portfolioItems);
-    const { items: gigs, loading: gigsLoading, error: gigsError } = useCollectionFallback("gigs", freelancerGigs);
-    const loading = portfoliosLoading || gigsLoading;
-    const dataError = portfoliosError || gigsError;
+    const { items: portfolios, loading: portfoliosLoading, error: portfoliosError } = useCollection("portfolios", portfolioQuery, Boolean(uid));
+    const { items: myGigs, loading: myGigsLoading, error: myGigsError } = useCollection("gigs", myGigsQuery, Boolean(uid));
+    const { items: openGigs, loading: openGigsLoading, error: openGigsError } = useCollection("gigs", openGigsQuery, Boolean(uid));
+    const loading = portfoliosLoading || myGigsLoading || openGigsLoading;
+    const dataError = portfoliosError || myGigsError || openGigsError;
 
     useEffect(() => {
         document.title = "Freelancer Dashboard — Local Lift";
     }, []);
 
-    const earningsThisWeek = completedGigs.reduce((sum, gig) => sum + gig.amountPaid, 0);
+    const completedGigsFromFirestore = myGigs.filter(gig => gig.status === "Completed");
+    const activeGigs = myGigs.filter(gig => gig.status !== "Completed");
+    const earningsThisWeek = completedGigsFromFirestore.reduce((sum, gig) => sum + Number(gig.budget || 0), 0);
     const earningsThisMonth = earningsThisWeek * 4;
-    const totalEarned = earningsThisMonth + 8200;
-    const pending = gigs.length > 0 ? gigs[0].budget : 0;
+    const totalEarned = completedGigsFromFirestore.reduce((sum, gig) => sum + Number(gig.budget || 0), 0);
+    const pending = activeGigs.reduce((sum, gig) => sum + Number(gig.budget || 0), 0);
 
     const navItems = [
         { id: "dashboard", label: "Dashboard" },
         { id: "portfolio", label: "Portfolio" },
-        { id: "gigs", label: "Available Gigs", badge: gigs.length },
+        { id: "gigs", label: "Available Gigs", badge: activeGigs.length },
         { id: "earnings", label: "Earnings" }
     ];
 
     const stats = [
-        { label: "Active Gigs", value: gigs.length, color: "bg-green-50", textColor: "text-green-700" },
-        { label: "Completed Gigs", value: completedGigs.length, color: "bg-white", textColor: "text-gray-900" },
+        { label: "Active Gigs", value: myGigs.length, color: "bg-green-50", textColor: "text-green-700" },
+        { label: "Completed Gigs", value: completedGigsFromFirestore.length, color: "bg-white", textColor: "text-gray-900" },
         { label: "Earnings This Week", value: `INR ${earningsThisWeek.toLocaleString()}`, color: "bg-orange-50", textColor: "text-orange-700" },
         { label: "Portfolio Items", value: portfolios.length, color: "bg-green-50", textColor: "text-green-700" }
     ];
@@ -118,38 +92,50 @@ const FreelancerDashboard = () => {
         setIsSavingPortfolio(true);
 
         try {
-            let thumbnail = "https://picsum.photos/seed/new-portfolio/400/300";
+            let thumbnail = "";
 
             if (portfolioFile) {
-                thumbnail = URL.createObjectURL(portfolioFile);
+                thumbnail = await uploadToCloudinary(portfolioFile);
             }
 
             const newItem = {
                 ...portfolioForm,
                 thumbnail,
-                freelancerId: currentFreelancer.id
+                freelancerId: uid,
+                freelancerName: currentFreelancer.name
             };
 
-            try {
-                await addDoc(collection(db, "portfolios"), {
-                    ...newItem,
-                    createdAt: serverTimestamp()
-                });
-            } catch (err) {
-                // fallback to local update if Firestore fails
-                const localItem = { id: `p-${Date.now()}`, ...newItem, createdAt: new Date().toISOString() };
-                setActionError(err.message || "Could not save portfolio to Firestore. Saved locally instead.");
-                // naive local push to UI
-                // Note: portfolios is from hook; local persistence could be added if needed
-            }
+            await addDoc(collection(db, "portfolios"), {
+                ...newItem,
+                createdAt: serverTimestamp()
+            });
 
             setPortfolioForm({ title: "", brand: "", location: "Kurnool", description: "" });
             setPortfolioFile(null);
+            setPortfolioPreview("");
             setShowPortfolioModal(false);
         } catch (err) {
             setActionError(err.message || "Could not save portfolio item.");
         } finally {
             setIsSavingPortfolio(false);
+        }
+    };
+
+    const handleApplyToGig = async (e) => {
+        e.preventDefault();
+        setActionError("");
+
+        try {
+            await updateDoc(doc(db, "gigs", selectedGig.id), {
+                status: "Applied",
+                applicationMessage: applyMessage,
+                freelancerId: uid,
+                freelancerName: currentFreelancer.name,
+                appliedAt: serverTimestamp()
+            });
+            setApplySubmitted(true);
+        } catch (err) {
+            setActionError(err.message || "Could not send application.");
         }
     };
 
@@ -178,7 +164,11 @@ const FreelancerDashboard = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {portfolios.map(item => (
                         <article key={item.id} className="bg-white rounded-[12px] border border-gray-200 overflow-hidden shadow-sm">
-                            <img src={item.thumbnail} alt={item.title} className="w-full h-44 object-cover bg-gray-100" />
+                            {item.thumbnail ? (
+                                <img src={item.thumbnail} alt={item.title} className="w-full h-44 object-cover bg-gray-100" />
+                            ) : (
+                                <div className="w-full h-44 bg-gray-100" />
+                            )}
                             <div className="p-4">
                                 <h3 className="font-bold text-gray-900 mb-1">{item.title}</h3>
                                 <p className="text-sm text-gray-600">{item.brand}</p>
@@ -198,11 +188,11 @@ const FreelancerDashboard = () => {
     const renderGigs = () => (
         <section>
             <h2 className="text-xl font-bold text-gray-900 mb-4">Available Gigs</h2>
-            {gigs.length === 0 ? (
-                <div className="bg-white rounded-[12px] border border-gray-200 p-10 text-center text-gray-500">No gigs available right now.</div>
+            {openGigs.length === 0 ? (
+                <div className="bg-white rounded-[12px] border border-gray-200 p-10 text-center text-gray-500">No gigs available right now</div>
             ) : (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
-                    {gigs.map(gig => (
+                    {openGigs.map(gig => (
                         <article key={gig.id} className="bg-white rounded-[12px] border border-gray-200 p-5 shadow-sm">
                             <div className="flex items-start justify-between gap-4 mb-4">
                                 <div>
@@ -228,9 +218,10 @@ const FreelancerDashboard = () => {
                                     setApplyMessage("");
                                     setApplySubmitted(false);
                                 }}
+                                disabled={gig.status === "Applied" || gig.status === "Accepted"}
                                 className="px-4 py-2 bg-[#2D6A4F] text-white rounded-lg hover:bg-[#24563f] transition font-medium"
                             >
-                                Apply
+                                {gig.status === "Applied" ? "Applied" : gig.status === "Accepted" ? "Accepted" : "Apply"}
                             </button>
                         </article>
                     ))}
@@ -335,13 +326,13 @@ const FreelancerDashboard = () => {
                     </nav>
                     <div className="bg-white rounded-[12px] border border-gray-200 p-4">
                         <div className="flex items-center gap-3 mb-3">
-                            <img src={currentFreelancer.image} alt={currentFreelancer.name} className="w-12 h-12 rounded-full bg-gray-100" />
+                            <img src={currentFreelancer.photoUrl} alt={currentFreelancer.name} className="w-12 h-12 rounded-full bg-gray-100" />
                             <div>
-                                <p className="font-bold text-gray-900">Alex J.</p>
-                                <p className="text-xs text-gray-600">Freelancer | Kurnool</p>
+                                <p className="font-bold text-gray-900">{currentFreelancer.name}</p>
+                                <p className="text-xs text-gray-600">Freelancer | {currentFreelancer.location}</p>
                             </div>
                         </div>
-                        <p className="text-xs font-semibold text-gray-900 mb-4">4.7 rating</p>
+                        <p className="text-xs font-semibold text-gray-900 mb-4">{currentFreelancer.rating} rating</p>
                         <button className="w-full px-3 py-2 border border-[#2D6A4F] text-[#2D6A4F] rounded-lg hover:bg-[#f0f5f3] transition font-medium text-sm">Edit Profile</button>
                     </div>
                 </aside>
@@ -364,7 +355,7 @@ const FreelancerDashboard = () => {
                         {applySubmitted ? (
                             <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700">Application sent to {selectedGig.businessName}.</div>
                         ) : (
-                            <form onSubmit={(e) => { e.preventDefault(); setApplySubmitted(true); }} className="space-y-4">
+                            <form onSubmit={handleApplyToGig} className="space-y-4">
                                 <div className="rounded-lg bg-[#F5F5F0] border p-4">
                                     <p className="font-bold text-gray-900">{selectedGig.jobType}</p>
                                     <p className="text-sm text-gray-600">{selectedGig.businessName} | INR {selectedGig.budget}</p>
@@ -382,13 +373,23 @@ const FreelancerDashboard = () => {
                     <div className="bg-white rounded-[12px] shadow-lg w-full max-w-lg p-6">
                         <div className="flex items-center justify-between mb-4">
                             <h2 className="text-xl font-bold text-gray-900">Add Portfolio Item</h2>
-                            <button type="button" onClick={() => setShowPortfolioModal(false)} className="text-2xl text-gray-500">x</button>
+                            <button type="button" onClick={() => setShowPortfolioModal(false)} className="text-gray-500 hover:text-gray-700" aria-label="Close"><X size={24} /></button>
                         </div>
                         <form onSubmit={handleSavePortfolio} className="space-y-4">
                             <input name="title" value={portfolioForm.title} onChange={handlePortfolioChange} required className="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Project title" />
                             <input name="brand" value={portfolioForm.brand} onChange={handlePortfolioChange} required className="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Brand name" />
                             <input name="location" value={portfolioForm.location} onChange={handlePortfolioChange} className="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Location" />
-                            <input type="file" accept="image/*,video/*" onChange={(e) => setPortfolioFile(e.target.files?.[0] || null)} className="w-full px-3 py-2 border border-gray-300 rounded-lg" />
+                            {portfolioPreview && <img src={portfolioPreview} alt="Portfolio preview" className="w-full h-40 object-cover rounded-lg bg-gray-100" />}
+                            <input
+                                type="file"
+                                accept="image/*"
+                                onChange={(e) => {
+                                    const file = e.target.files?.[0] || null;
+                                    setPortfolioFile(file);
+                                    setPortfolioPreview(file ? URL.createObjectURL(file) : "");
+                                }}
+                                className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                            />
                             <textarea name="description" value={portfolioForm.description} onChange={handlePortfolioChange} required rows="3" className="w-full px-3 py-2 border border-gray-300 rounded-lg" placeholder="Description" />
                             <button disabled={isSavingPortfolio} className="w-full px-4 py-2 bg-[#2D6A4F] text-white rounded-lg hover:bg-[#24563f] disabled:bg-gray-400 transition font-medium">
                                 {isSavingPortfolio ? "Saving..." : "Save Portfolio Item"}

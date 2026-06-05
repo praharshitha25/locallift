@@ -13,12 +13,12 @@ import {
 
 const Landing = () => {
   return (
-    <div className="bg-[#FAFAF8] text-[#1A1A1A] min-h-screen">
+    <div className="bg-gradient-to-b from-[#F3FAF5] via-[#ECF8EF] to-[#FAFAF8] text-[#1A1A1A] min-h-screen">
 
       <Navbar />
 
       {/* HERO SECTION */}
-      <section className="max-w-7xl mx-auto px-6 py-24 grid lg:grid-cols-2 gap-14 items-center">
+      <section className="max-w-7xl mx-auto px-6 py-24 grid lg:grid-cols-2 gap-14 items-center bg-[#ECF9F0] rounded-[40px] shadow-[0_20px_90px_rgba(45,106,79,0.12)]">
 
         <div>
           <div className="inline-flex items-center gap-2 bg-[#E8F5EC] text-[#2D6A4F] px-4 py-2 rounded-full text-sm font-medium mb-6">
@@ -57,7 +57,7 @@ const Landing = () => {
 
         {/* HERO VISUAL */}
         <div className="relative">
-          <div className="bg-white rounded-3xl shadow-xl p-8 border">
+          <div className="bg-gradient-to-br from-white via-[#F2FBF4] to-[#ECF9EE] rounded-3xl shadow-xl p-8 border border-[#D1E7D4]">
 
             <div className="space-y-5">
 
@@ -124,7 +124,7 @@ const Landing = () => {
       </section>
 
       {/* PROBLEM SECTION */}
-      <section className="max-w-7xl mx-auto px-6 py-20">
+      <section className="max-w-7xl mx-auto px-6 py-20 bg-[#F4FBF4] rounded-[40px] shadow-[0_20px_60px_rgba(45,106,79,0.06)]">
 
         <div className="text-center mb-16">
           <h2 className="text-4xl font-bold mb-4">
@@ -138,12 +138,8 @@ const Landing = () => {
 
         <div className="grid md:grid-cols-3 gap-8">
 
-          <div className="bg-white p-8 rounded-3xl shadow-sm border">
+          <div className="bg-[#F7FBF6] p-8 rounded-3xl shadow-sm border border-[#D9E8D9]">
             <Package className="text-[#F4A261] mb-5" size={34} />
-
-            <h3 className="text-2xl font-semibold mb-4">
-              Makers
-            </h3>
 
             <p className="text-gray-600 leading-relaxed">
               Home-based creators often lack visibility,
@@ -151,7 +147,7 @@ const Landing = () => {
             </p>
           </div>
 
-          <div className="bg-white p-8 rounded-3xl shadow-sm border">
+          <div className="bg-[#F7FBF6] p-8 rounded-3xl shadow-sm border border-[#D9E8D9]">
             <Store className="text-[#2D6A4F] mb-5" size={34} />
 
             <h3 className="text-2xl font-semibold mb-4">
@@ -164,7 +160,7 @@ const Landing = () => {
             </p>
           </div>
 
-          <div className="bg-white p-8 rounded-3xl shadow-sm border">
+          <div className="bg-[#F7FBF6] p-8 rounded-3xl shadow-sm border border-[#D9E8D9]">
             <Video className="text-[#52B788] mb-5" size={34} />
 
             <h3 className="text-2xl font-semibold mb-4">
@@ -181,7 +177,7 @@ const Landing = () => {
       </section>
 
       {/* HOW IT WORKS */}
-      <section id="how-it-works" className="bg-white py-24">
+      <section id="how-it-works" className="bg-[#ECF9F0] py-24">
 
         <div className="max-w-7xl mx-auto px-6">
 
@@ -247,7 +243,7 @@ const Landing = () => {
       </section>
 
       {/* LOOP SECTION */}
-      <section className="max-w-7xl mx-auto px-6 py-24">
+      <section className="max-w-7xl mx-auto px-6 py-24 bg-[#F5FBF6] rounded-[40px] shadow-[0_20px_60px_rgba(45,106,79,0.06)]">
 
         <div className="text-center mb-16">
           <h2 className="text-4xl font-bold mb-4">
@@ -259,7 +255,7 @@ const Landing = () => {
           </p>
         </div>
 
-        <div className="bg-white rounded-3xl border shadow-sm p-10">
+        <div className="bg-[#F7FBF6] rounded-3xl border border-[#D9E8D9] shadow-sm p-10">
 
           <div className="grid md:grid-cols-[1fr_auto_1fr_auto_1fr] gap-6 items-center">
 
@@ -324,7 +320,7 @@ const Landing = () => {
       </section>
 
       {/* WHO IS THIS FOR */}
-      <section className="bg-white py-24">
+      <section className="bg-[#EDF9EE] py-24">
 
         <div className="max-w-7xl mx-auto px-6">
 
@@ -340,7 +336,7 @@ const Landing = () => {
 
           <div className="grid md:grid-cols-3 gap-8">
 
-            <div className="border rounded-3xl p-8 hover:shadow-md transition">
+            <div className="border border-[#D9E8D9] bg-[#F8FCF8] rounded-3xl p-8 hover:shadow-md transition">
               <h3 className="text-2xl font-semibold mb-4">
                 Home-preneurs
               </h3>
@@ -351,7 +347,7 @@ const Landing = () => {
               </p>
             </div>
 
-            <div className="border rounded-3xl p-8 hover:shadow-md transition">
+            <div className="border border-[#D9E8D9] bg-[#F8FCF8] rounded-3xl p-8 hover:shadow-md transition">
               <h3 className="text-2xl font-semibold mb-4">
                 Local Retailers
               </h3>
@@ -362,7 +358,7 @@ const Landing = () => {
               </p>
             </div>
 
-            <div className="border rounded-3xl p-8 hover:shadow-md transition">
+            <div className="border border-[#D9E8D9] bg-[#F8FCF8] rounded-3xl p-8 hover:shadow-md transition">
               <h3 className="text-2xl font-semibold mb-4">
                 Creative Freelancers
               </h3>
@@ -378,7 +374,7 @@ const Landing = () => {
       </section>
 
       {/* FOOTER */}
-      <footer className="border-t bg-[#FAFAF8]">
+      <footer className="border-t border-[#D1E7D4] bg-[#EDF9EE]">
 
         <div className="max-w-7xl mx-auto px-6 py-10 flex flex-col md:flex-row items-center justify-between gap-5">
 

@@ -4,8 +4,15 @@ export const findById = (items, id) => items.find(item => sameId(item.id, id));
 
 export const enrichConsignment = (consignment, { products, makers, shops }) => {
     const product = findById(products, consignment.productId);
-    const maker = findById(makers, consignment.makerId || product?.makerId);
-    const shop = findById(shops, consignment.shopId);
+    const maker = findById(makers, consignment.makerId || product?.makerId) || {
+        id: consignment.makerId || product?.makerId,
+        name: consignment.makerName || product?.makerName || "Unknown Maker"
+    };
+    const shop = findById(shops, consignment.shopId) || {
+        id: consignment.shopId,
+        name: consignment.shopName || "Your Shop",
+        distance: 0
+    };
     const split = Number(consignment.splitPercentage ?? 50);
 
     return {

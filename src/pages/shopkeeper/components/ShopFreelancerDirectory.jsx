@@ -1,14 +1,35 @@
 import { useState } from "react";
 
-const ShopFreelancerDirectory = ({ freelancers }) => {
+const ShopFreelancerDirectory = ({ freelancers, onHire }) => {
     const [selectedFreelancer, setSelectedFreelancer] = useState(null);
     const [description, setDescription] = useState("");
     const [submitted, setSubmitted] = useState(false);
+    const [isSubmitting, setIsSubmitting] = useState(false);
+    const [error, setError] = useState("");
 
-    const handleSubmit = (e) => {
+    const handleSubmit = async (e) => {
         e.preventDefault();
-        setSubmitted(true);
+        setError("");
+        setIsSubmitting(true);
+
+        const saved = await onHire?.(selectedFreelancer, description);
+
+        if (saved) {
+            setSubmitted(true);
+        } else {
+            setError("Could not send hire request. Please try again.");
+        }
+
+        setIsSubmitting(false);
     };
+
+    if (freelancers.length === 0) {
+        return (
+            <div className="bg-white rounded-[12px] border border-gray-200 p-10 text-center text-gray-500">
+                No freelancers found yet.
+            </div>
+        );
+    }
 
     return (
         <>
@@ -17,23 +38,23 @@ const ShopFreelancerDirectory = ({ freelancers }) => {
                     <div key={freelancer.id} className="bg-white rounded-[12px] border border-gray-200 overflow-hidden shadow-sm">
                         <div className="p-6 text-center border-b border-gray-200">
                             <img
-                                src={freelancer.image}
+                                src={freelancer.photoUrl || freelancer.photo || freelancer.image || `https://ui-avatars.com/api/?name=${encodeURIComponent(freelancer.name || "Freelancer")}&background=2D6A4F&color=fff`}
                                 alt={freelancer.name}
                                 className="w-16 h-16 rounded-full mx-auto mb-3 border"
                             />
-                            <h3 className="font-bold text-lg text-gray-900">{freelancer.name}</h3>
-                            <p className="text-sm text-gray-600">INR {freelancer.ratePerGig} per gig</p>
+                            <h3 className="font-bold text-lg text-gray-900">{freelancer.name || freelancer.email || "Freelancer"}</h3>
+                            <p className="text-sm text-gray-600">INR {freelancer.ratePerGig || 0} per gig</p>
                         </div>
                         <div className="p-4">
                             <div className="flex flex-wrap gap-2 mb-4">
-                                {freelancer.skills.map(skill => (
+                                {(freelancer.skills || ["Local promotions"]).map(skill => (
                                     <span key={skill} className="px-2 py-1 rounded-full bg-[#2D6A4F]/10 text-[#2D6A4F] text-xs font-medium">
                                         {skill}
                                     </span>
                                 ))}
                             </div>
                             <a
-                                href={freelancer.portfolio}
+                                href={freelancer.portfolio || "#"}
                                 target="_blank"
                                 rel="noreferrer"
                                 className="block text-center px-4 py-2 border border-[#2D6A4F] text-[#2D6A4F] rounded-lg hover:bg-[#f0f5f3] transition text-sm font-medium mb-2"
@@ -46,6 +67,7 @@ const ShopFreelancerDirectory = ({ freelancers }) => {
                                     setSelectedFreelancer(freelancer);
                                     setDescription("");
                                     setSubmitted(false);
+                                    setError("");
                                 }}
                                 className="w-full px-4 py-2 bg-[#2D6A4F] text-white rounded-lg hover:bg-[#24563f] transition text-sm font-medium"
                             >
@@ -77,8 +99,13 @@ const ShopFreelancerDirectory = ({ freelancers }) => {
                                     placeholder="Describe the promo, photos, reel, poster, or campaign you need..."
                                     required
                                 />
-                                <button className="w-full px-4 py-2 bg-[#2D6A4F] text-white rounded-lg hover:bg-[#24563f] transition font-medium">
-                                    Send Hire Request
+                                {error && (
+                                    <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                                        {error}
+                                    </div>
+                                )}
+                                <button disabled={isSubmitting} className="w-full px-4 py-2 bg-[#2D6A4F] text-white rounded-lg hover:bg-[#24563f] disabled:bg-gray-400 transition font-medium">
+                                    {isSubmitting ? "Sending..." : "Send Hire Request"}
                                 </button>
                             </form>
                         )}

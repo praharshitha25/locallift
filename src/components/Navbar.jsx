@@ -1,36 +1,17 @@
-import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { onAuthStateChanged, signOut } from "firebase/auth";
+import { signOut } from "firebase/auth";
 import { auth } from "../firebase/config";
-import { clearDemoAuth, getDemoAuth } from "../auth/demoAuth";
+import { useAuth } from "../auth/AuthContext";
 
 const Navbar = () => {
-  const [user, setUser] = useState(null);
-  const [demoUser, setDemoUser] = useState(getDemoAuth());
+  const { currentUser } = useAuth();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const syncDemoUser = () => setDemoUser(getDemoAuth());
-    const unsubscribe = onAuthStateChanged(auth, (u) => setUser(u));
-
-    window.addEventListener("storage", syncDemoUser);
-    window.addEventListener("local-lift-demo-auth", syncDemoUser);
-
-    return () => {
-      unsubscribe();
-      window.removeEventListener("storage", syncDemoUser);
-      window.removeEventListener("local-lift-demo-auth", syncDemoUser);
-    };
-  }, []);
-
   const handleLogout = async () => {
-    clearDemoAuth();
-    if (user) {
-      try {
-        await signOut(auth);
-      } catch (err) {
-        // ignore sign out errors, demo auth cleared anyway
-      }
+    try {
+      await signOut(auth);
+    } catch (err) {
+      // Keep navigation responsive even if Firebase has already cleared the session.
     }
     navigate("/");
   };
@@ -47,14 +28,22 @@ const Navbar = () => {
         </Link>
 
         <div className="flex items-center gap-3">
-          {user || demoUser ? (
-            <button
-              type="button"
-              onClick={handleLogout}
-              className="px-4 py-2 rounded-xl bg-[#2D6A4F] text-white text-sm hover:bg-[#24563f] transition"
-            >
-              Logout
-            </button>
+          {currentUser ? (
+            <>
+              <Link
+                to="/"
+                className="px-4 py-2 rounded-xl border text-sm hover:bg-gray-100 transition"
+              >
+                Home
+              </Link>
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="px-4 py-2 rounded-xl bg-[#2D6A4F] text-white text-sm hover:bg-[#24563f] transition"
+              >
+                Logout
+              </button>
+            </>
           ) : (
             <>
               <Link

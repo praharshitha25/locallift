@@ -34,11 +34,17 @@ const ShelfInventory = ({ inventory, onLogSale }) => {
                             return (
                                 <tr key={item.id} className={`${idx % 2 === 0 ? "bg-white" : "bg-gray-50"} border-b border-gray-200`}>
                                     <td className="px-5 py-3">
-                                        <img
-                                            src={item.product?.image}
-                                            alt={item.product?.name || "Product"}
-                                            className="w-14 h-14 rounded-lg object-cover bg-gray-100"
-                                        />
+                                        {item.product?.imageUrl || item.product?.image ? (
+                                            <img
+                                                src={item.product.imageUrl || item.product.image}
+                                                alt={item.product?.name || "Product"}
+                                                className="w-14 h-14 rounded-lg object-cover bg-gray-100"
+                                            />
+                                        ) : (
+                                            <div className="w-14 h-14 rounded-lg bg-gray-100 flex items-center justify-center text-[10px] text-gray-500 text-center">
+                                                No image
+                                            </div>
+                                        )}
                                     </td>
                                     <td className="px-5 py-3 font-semibold text-gray-900">{item.product?.name || "Unknown Product"}</td>
                                     <td className="px-5 py-3 text-gray-700">{item.maker?.name || "Unknown Maker"}</td>

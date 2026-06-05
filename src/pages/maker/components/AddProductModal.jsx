@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { db } from "../../../firebase/config";
+import { X } from "lucide-react";
+import { uploadToCloudinary } from "../../../lib/cloudinary";
 
 const AddProductModal = ({ makerId, onClose, onSubmit }) => {
     const [formData, setFormData] = useState({
@@ -10,10 +10,10 @@ const AddProductModal = ({ makerId, onClose, onSubmit }) => {
         retailPrice: "",
         quantity: "",
         description: "",
-        image: "https://images.unsplash.com/photo-1609042231775-52ec8b5c3b5d?w=600&auto=format&fit=crop"
+        imageUrl: "https://images.unsplash.com/photo-1609042231775-52ec8b5c3b5d?w=600&auto=format&fit=crop"
     });
     const [imageFile, setImageFile] = useState(null);
-    const [previewUrl, setPreviewUrl] = useState(formData.image);
+    const [previewUrl, setPreviewUrl] = useState(formData.imageUrl);
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [error, setError] = useState("");
 
@@ -47,37 +47,20 @@ const AddProductModal = ({ makerId, onClose, onSubmit }) => {
         setIsSubmitting(true);
 
         try {
-            let imageUrl = formData.image;
+            let imageUrl = formData.imageUrl;
 
             if (imageFile) {
-                imageUrl = URL.createObjectURL(imageFile);
+                imageUrl = await uploadToCloudinary(imageFile);
             }
 
             const product = {
                 ...formData,
-                image: imageUrl,
+                imageUrl,
                 makerId,
-                status: "Active",
-                createdAt: new Date().toISOString()
+                status: "Active"
             };
 
-            try {
-                const docRef = await addDoc(collection(db, "products"), {
-                    ...product,
-                    createdAt: serverTimestamp()
-                });
-
-                onSubmit({
-                    ...product,
-                    id: docRef.id,
-                    createdAt: new Date().toISOString()
-                });
-            } catch (err) {
-                // fallback to local submission
-                const localProduct = { ...product, id: `prod-${Date.now()}` };
-                onSubmit(localProduct);
-                setError(err.message || "Could not save product to Firestore. Saved locally instead.");
-            }
+            await onSubmit(product);
         } catch (err) {
             setError(err.message || "Could not save product.");
         } finally {
@@ -93,10 +76,10 @@ const AddProductModal = ({ makerId, onClose, onSubmit }) => {
                     <button
                         type="button"
                         onClick={onClose}
-                        className="text-gray-500 hover:text-gray-700 text-2xl"
+                        className="text-gray-500 hover:text-gray-700"
                         aria-label="Close"
                     >
-                        x
+                        <X size={24} />
                     </button>
                 </div>
 
@@ -193,7 +176,7 @@ const AddProductModal = ({ makerId, onClose, onSubmit }) => {
                                 className="sr-only"
                             />
                         </label>
-                        <p className="text-xs text-gray-500 mt-2">Select an image to preview locally. Firebase upload is currently disabled.</p>
+                        <p className="text-xs text-gray-500 mt-2">Select an image to preview locally. It uploads when you submit.</p>
                     </div>
 
                     {error && (

@@ -1,21 +1,58 @@
 import { useState } from "react";
 
-const ShopDiscovery = ({ shops }) => {
+const ShopDiscovery = ({ shops, relationships = [], onSendRequest }) => {
     const [filter, setFilter] = useState("all");
     const [distanceFilter, setDistanceFilter] = useState(5);
+    const [sentRequests, setSentRequests] = useState(new Set());
+    const [lastSentShop, setLastSentShop] = useState(null);
+    const [sendingShopId, setSendingShopId] = useState("");
+    const [error, setError] = useState("");
 
     const shopTypes = ["Gift Store", "Fashion & Lifestyle", "Handmade Store", "Food & Groceries", "Natural Products"];
+    const relationshipRank = { Connected: 3, Pending: 2, Rejected: 1 };
+    const relationshipByShopId = relationships.reduce((map, request) => {
+        const key = String(request.shopId);
+        const current = map.get(key);
+
+        if (!current || (relationshipRank[request.status] || 0) > (relationshipRank[current.status] || 0)) {
+            map.set(key, request);
+        }
+
+        return map;
+    }, new Map());
 
     const filteredShops = shops.filter(shop => {
         const typeMatch = filter === "all" || shop.type === filter;
-        const distanceMatch = shop.distance <= distanceFilter;
+        const distanceMatch = Number(shop.distance ?? 0) <= distanceFilter;
         return typeMatch && distanceMatch;
     });
+
+    const handleSendRequest = async (shop) => {
+        setError("");
+        setSendingShopId(shop.id);
+
+        const sent = onSendRequest ? await onSendRequest(shop) : false;
+
+        if (sent) {
+            setSentRequests(prev => new Set([...prev, shop.id]));
+            setLastSentShop(shop.id);
+            setTimeout(() => setLastSentShop(null), 3000);
+        } else {
+            setError("Could not send request. Please try again.");
+        }
+
+        setSendingShopId("");
+    };
 
     return (
         <div className="space-y-6">
             {/* Filters */}
             <div className="bg-white rounded-[12px] border border-gray-200 p-6">
+                {error && (
+                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                        {error}
+                    </div>
+                )}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">Shop Type</label>
@@ -52,7 +89,14 @@ const ShopDiscovery = ({ shops }) => {
                 </div>
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {filteredShops.map(shop => (
+                    {filteredShops.map(shop => {
+                        const relationship = relationshipByShopId.get(String(shop.id));
+                        const status = sentRequests.has(shop.id) ? "Pending" : relationship?.status;
+                        const isConnected = status === "Connected";
+                        const isPending = status === "Pending";
+                        const isSending = sendingShopId === shop.id;
+
+                        return (
                         <div key={shop.id} className="bg-white rounded-[12px] border border-gray-200 overflow-hidden shadow-sm hover:shadow-md transition">
                             {/* Shop Image */}
                             <div className="w-full h-40 bg-gradient-to-br from-[#2D6A4F] to-[#1f4d37] flex items-center justify-center">
@@ -62,26 +106,39 @@ const ShopDiscovery = ({ shops }) => {
                             {/* Shop Details */}
                             <div className="p-4">
                                 <h3 className="font-bold text-gray-900 text-lg mb-1">{shop.name}</h3>
-                                <p className="text-xs text-gray-600 mb-3">{shop.type}</p>
+                                <p className="text-xs text-gray-600 mb-3">{shop.type || "Shopkeeper"}</p>
 
                                 <div className="space-y-2 text-sm mb-4">
                                     <div className="flex items-center gap-2 text-gray-700">
                                         <span>📍</span>
-                                        <span>{shop.location}</span>
-                                        <span className="text-gray-500">({shop.distance} km away)</span>
+                                        <span>{shop.location || "Kurnool"}</span>
+                                        <span className="text-gray-500">({shop.distance ?? 0} km away)</span>
                                     </div>
                                     <div className="flex items-center gap-2 text-gray-700">
                                         <span>🛑</span>
-                                        <span>{shop.shelfSlots} shelf slots available</span>
+                                        <span>{shop.shelfSlots ?? 0} shelf slots available</span>
                                     </div>
                                 </div>
 
-                                <button className="w-full px-4 py-2 bg-[#2D6A4F] text-white rounded-lg hover:bg-[#24563f] transition font-medium text-sm">
-                                    Send Connection Request
+                                <button
+                                    onClick={() => handleSendRequest(shop)}
+                                    disabled={isPending || isConnected || isSending}
+                                    className={`w-full px-4 py-2 rounded-lg transition font-medium text-sm ${isConnected
+                                            ? "bg-[#2D6A4F]/10 text-[#2D6A4F] cursor-default"
+                                            : isPending
+                                            ? "bg-green-100 text-green-700 cursor-default"
+                                            : "bg-[#2D6A4F] text-white hover:bg-[#24563f]"
+                                        }`}
+                                >
+                                    {isConnected ? "Connected" : isPending ? "Request Sent" : isSending ? "Sending..." : status === "Rejected" ? "Request Again" : "Send Connection Request"}
                                 </button>
+                                {lastSentShop === shop.id && (
+                                    <p className="text-xs text-green-600 mt-2 font-medium">Connection request sent to {shop.name}</p>
+                                )}
                             </div>
                         </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
         </div>

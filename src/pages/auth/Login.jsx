@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { signInAnonymously } from "firebase/auth";
-import { auth } from "../../firebase/config";
-import { setDemoAuth } from "../../auth/demoAuth";
+import { createUserWithEmailAndPassword, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { doc, getDoc, serverTimestamp, setDoc } from "firebase/firestore";
+import { auth, db } from "../../firebase/config";
+import { getDashboardPath } from "../../auth/AuthContext";
 
 const roles = [
     {
@@ -25,12 +26,34 @@ const roles = [
     }
 ];
 
+const roleDefaults = {
+    maker: {
+        rating: "New"
+    },
+    shopkeeper: {
+        type: "Local Store",
+        shelfSlots: 10,
+        distance: 0,
+        rating: "New"
+    },
+    freelancer: {
+        skills: ["Local promotions"],
+        ratePerGig: 1000,
+        portfolio: "",
+        rating: "New"
+    }
+};
+
 const Login = () => {
     const [searchParams] = useSearchParams();
     const navigate = useNavigate();
-    const initialRole = searchParams.get("role");
+    const fromPath = searchParams.get("from") || "";
+    const inferredRole = roles.find(role => fromPath.includes(role.path))?.id;
+    const initialRole = searchParams.get("role") || inferredRole || "maker";
     const defaultRole = roles.some(role => role.id === initialRole) ? initialRole : "maker";
     const [selectedRole, setSelectedRole] = useState(defaultRole);
+    const [mode, setMode] = useState("login");
+    const [formData, setFormData] = useState({ name: "", email: "", password: "" });
     const [isSigningIn, setIsSigningIn] = useState(false);
     const [error, setError] = useState("");
 
@@ -39,17 +62,39 @@ const Login = () => {
         [selectedRole]
     );
 
-    const handleContinue = async () => {
+    const handleChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+    };
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
         setError("");
         setIsSigningIn(true);
 
         try {
-            await signInAnonymously(auth);
-            navigate(activeRole.path);
+            if (mode === "signup") {
+                const credential = await createUserWithEmailAndPassword(auth, formData.email, formData.password);
+                await updateProfile(credential.user, { displayName: formData.name });
+                await setDoc(doc(db, "users", credential.user.uid), {
+                    name: formData.name,
+                    email: formData.email,
+                    role: activeRole.id,
+                    photoUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=2D6A4F&color=fff`,
+                    location: "Kurnool",
+                    ...(roleDefaults[activeRole.id] || {}),
+                    createdAt: serverTimestamp()
+                });
+                navigate(getDashboardPath(activeRole.id));
+                return;
+            }
+
+            const credential = await signInWithEmailAndPassword(auth, formData.email, formData.password);
+            const userSnapshot = await getDoc(doc(db, "users", credential.user.uid));
+            const role = userSnapshot.data()?.role || "maker";
+            navigate(getDashboardPath(role));
         } catch (err) {
-            // Fallback to demo auth when Firebase auth is unavailable
-            setDemoAuth(activeRole.id);
-            navigate(activeRole.path);
+            setError(err.message || "Could not sign in.");
         } finally {
             setIsSigningIn(false);
         }
@@ -63,44 +108,85 @@ const Login = () => {
                 </h1>
 
                 <p className="text-gray-500 text-center mb-8">
-                    Choose your role to continue
+                    {mode === "login" ? "Sign in to continue" : "Create your LocalLift account"}
                 </p>
 
-                <div className="grid grid-cols-3 gap-2 mb-6">
-                    {roles.map(role => (
-                        <button
-                            key={role.id}
-                            type="button"
-                            onClick={() => setSelectedRole(role.id)}
-                            className={`px-3 py-2 rounded-xl border text-sm font-medium transition ${selectedRole === role.id
-                                ? "bg-[#2D6A4F] text-white border-[#2D6A4F]"
-                                : "bg-white text-gray-700 hover:bg-gray-50"
-                                }`}
-                        >
-                            {role.label}
-                        </button>
-                    ))}
-                </div>
+                <form onSubmit={handleSubmit} className="space-y-4">
+                    {mode === "signup" && (
+                        <input
+                            type="text"
+                            name="name"
+                            value={formData.name}
+                            onChange={handleChange}
+                            className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
+                            placeholder="Name"
+                            required
+                        />
+                    )}
+                    <input
+                        type="email"
+                        name="email"
+                        value={formData.email}
+                        onChange={handleChange}
+                        className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
+                        placeholder="Email"
+                        required
+                    />
+                    <input
+                        type="password"
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
+                        placeholder="Password"
+                        minLength={6}
+                        required
+                    />
 
-                <div className="rounded-2xl bg-[#F5F5F0] border p-4 mb-6">
-                    <p className="font-semibold text-gray-900 mb-1">{activeRole.label}</p>
-                    <p className="text-sm text-gray-600">{activeRole.description}</p>
-                </div>
+                    {mode === "signup" && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">Role</label>
+                            <select
+                                value={selectedRole}
+                                onChange={(e) => setSelectedRole(e.target.value)}
+                                className="w-full px-3 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
+                            >
+                                {roles.map(role => (
+                                    <option key={role.id} value={role.id}>{role.label}</option>
+                                ))}
+                            </select>
+                            <p className="text-xs text-gray-500 mt-2">{activeRole.description}</p>
+                        </div>
+                    )}
 
-                {error && (
-                    <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                        {error}
-                    </div>
-                )}
+                    {error && (
+                        <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                            {error}
+                        </div>
+                    )}
 
-                <button
-                    type="button"
-                    onClick={handleContinue}
-                    disabled={isSigningIn}
-                    className="w-full bg-[#2D6A4F] hover:bg-[#24563f] disabled:bg-gray-400 text-white py-3 rounded-2xl transition font-medium"
-                >
-                    {isSigningIn ? "Signing in..." : `Continue as ${activeRole.label}`}
-                </button>
+                    <button
+                        type="submit"
+                        disabled={isSigningIn}
+                        className="w-full bg-[#2D6A4F] hover:bg-[#24563f] disabled:bg-gray-400 text-white py-3 rounded-2xl transition font-medium"
+                    >
+                        {isSigningIn ? "Please wait..." : mode === "login" ? "Login" : `Sign Up as ${activeRole.label}`}
+                    </button>
+                </form>
+
+                <p className="text-center text-sm text-gray-600 mt-6">
+                    {mode === "login" ? "New to LocalLift?" : "Already have an account?"}{" "}
+                    <button
+                        type="button"
+                        onClick={() => {
+                            setMode(mode === "login" ? "signup" : "login");
+                            setError("");
+                        }}
+                        className="font-semibold text-[#2D6A4F] hover:underline"
+                    >
+                        {mode === "login" ? "Sign Up" : "Login"}
+                    </button>
+                </p>
             </div>
         </div>
     );

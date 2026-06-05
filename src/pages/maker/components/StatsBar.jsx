@@ -2,9 +2,7 @@ const StatsBar = ({ products, consignments, sales }) => {
     const totalProducts = products.length;
     const activeConsignments = consignments.filter(c => c.status === "Active").length;
     const unitsSoldThisWeek = sales.reduce((acc, sale) => acc + sale.quantitySold, 0);
-    const pendingEarnings = sales
-        .filter(sale => consignments.find(c => c.id === sale.consignmentId && c.status === "Active"))
-        .reduce((acc, sale) => acc + sale.makerCut, 0);
+    const pendingEarnings = sales.reduce((acc, sale) => acc + sale.makerCut, 0);
 
     const stats = [
         {

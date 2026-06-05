@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { X } from "lucide-react";
 
 const sameId = (left, right) => String(left) === String(right);
 
@@ -11,6 +12,14 @@ const LogDropoffModal = ({ products, shops, onClose, onSubmit }) => {
         notes: ""
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    useEffect(() => {
+        setFormData(prev => ({
+            ...prev,
+            shopId: shops[0]?.id || "",
+            productId: products[0]?.id || ""
+        }));
+    }, [shops, products]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;
@@ -46,10 +55,10 @@ const LogDropoffModal = ({ products, shops, onClose, onSubmit }) => {
                     <button
                         type="button"
                         onClick={onClose}
-                        className="text-gray-500 hover:text-gray-700 text-2xl"
+                        className="text-gray-500 hover:text-gray-700"
                         aria-label="Close"
                     >
-                        x
+                        <X size={24} />
                     </button>
                 </div>
 

@@ -1,58 +1,30 @@
-import { useEffect, useMemo, useState } from "react";
-import { collection, onSnapshot } from "firebase/firestore";
-import { db } from "../firebase/config";
-import { freelancerGigs, settlementData } from "../data/seedData";
-
-const readSnapshot = (snapshot) => snapshot.docs.map(item => ({ id: item.id, ...item.data() }));
-
-const useCollectionFallback = (collectionName, fallbackData) => {
-    const [items, setItems] = useState(fallbackData);
-    const [loading, setLoading] = useState(true);
-    const [error, setError] = useState("");
-
-    useEffect(() => {
-        let isMounted = true;
-        const timeoutId = window.setTimeout(() => {
-            if (!isMounted) return;
-            setItems(fallbackData);
-            setLoading(false);
-            setError("Unable to connect to Firestore. Showing seed data.");
-        }, 2500);
-
-        const unsubscribe = onSnapshot(
-            collection(db, collectionName),
-            (snapshot) => {
-                if (!isMounted) return;
-                clearTimeout(timeoutId);
-                const firestoreItems = readSnapshot(snapshot);
-                setItems(firestoreItems.length > 0 ? firestoreItems : fallbackData);
-                setLoading(false);
-                setError("");
-            },
-            (err) => {
-                if (!isMounted) return;
-                clearTimeout(timeoutId);
-                setItems(fallbackData);
-                setLoading(false);
-                setError(err.message);
-            }
-        );
-
-        return () => {
-            isMounted = false;
-            clearTimeout(timeoutId);
-            unsubscribe();
-        };
-    }, [collectionName, fallbackData]);
-
-    return { items, loading, error };
-};
+import { useEffect, useMemo } from "react";
+import { where } from "firebase/firestore";
+import { useAuth } from "../auth/AuthContext";
+import { useCollection, emptyConstraints } from "../firebase/firestoreHooks";
 
 const formatDate = (date) => date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
 const Settlement = () => {
-    const { items: sales, loading: salesLoading, error: salesError } = useCollectionFallback("sales", settlementData);
-    const { items: gigs, loading: gigsLoading, error: gigsError } = useCollectionFallback("gigs", freelancerGigs);
+    const { currentUser, userDoc } = useAuth();
+    const uid = currentUser?.uid;
+    const role = userDoc?.role;
+
+    const salesQuery = useMemo(() => {
+        if (!uid) return emptyConstraints;
+        if (role === "maker") return [where("makerId", "==", uid)];
+        if (role === "shopkeeper") return [where("shopId", "==", uid)];
+        return emptyConstraints;
+    }, [uid, role]);
+
+    const gigsQuery = useMemo(() => {
+        if (!uid) return emptyConstraints;
+        if (role === "freelancer") return [where("freelancerId", "==", uid)];
+        return emptyConstraints;
+    }, [uid, role]);
+
+    const { items: sales, loading: salesLoading, error: salesError } = useCollection("sales", salesQuery, Boolean(uid));
+    const { items: gigs, loading: gigsLoading, error: gigsError } = useCollection("gigs", gigsQuery, Boolean(uid));
 
     useEffect(() => {
         document.title = "Settlement Report — Local Lift";
@@ -142,7 +114,7 @@ const Settlement = () => {
                     ].map(([label, value]) => (
                         <div key={label} className="report-card rounded-[12px] border border-gray-200 p-4">
                             <p className="text-sm text-gray-600">{label}</p>
-                            <p className="text-2xl font-bold text-gray-900">INR {value.toLocaleString()}</p>
+                            <p className="text-2xl font-bold text-gray-900">₹{value.toLocaleString()}</p>
                         </div>
                     ))}
                 </div>
@@ -165,10 +137,10 @@ const Settlement = () => {
                                         <td className="border border-gray-200 px-3 py-2">{row.makerName}</td>
                                         <td className="border border-gray-200 px-3 py-2">{row.shopName}</td>
                                         <td className="border border-gray-200 px-3 py-2">{row.unitsSold}</td>
-                                        <td className="border border-gray-200 px-3 py-2">INR {row.retailPrice}</td>
-                                        <td className="border border-gray-200 px-3 py-2">INR {row.totalRevenue}</td>
-                                        <td className="border border-gray-200 px-3 py-2">INR {row.makerCut}</td>
-                                        <td className="border border-gray-200 px-3 py-2">INR {row.shopProfit}</td>
+                                        <td className="border border-gray-200 px-3 py-2">₹{row.retailPrice}</td>
+                                        <td className="border border-gray-200 px-3 py-2">₹{row.totalRevenue}</td>
+                                        <td className="border border-gray-200 px-3 py-2">₹{row.makerCut}</td>
+                                        <td className="border border-gray-200 px-3 py-2">₹{row.shopProfit}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -188,15 +160,17 @@ const Settlement = () => {
                                 </tr>
                             </thead>
                             <tbody>
-                                {gigs.map(gig => (
-                                    <tr key={gig.id}>
-                                        <td className="border border-gray-200 px-3 py-2">Alex J.</td>
-                                        <td className="border border-gray-200 px-3 py-2">{gig.jobType}</td>
-                                        <td className="border border-gray-200 px-3 py-2">{gig.businessName}</td>
-                                        <td className="border border-gray-200 px-3 py-2">INR {gig.budget}</td>
-                                        <td className="border border-gray-200 px-3 py-2">Pending</td>
-                                    </tr>
-                                ))}
+                                {gigs.map((gig) => {
+                                    return (
+                                        <tr key={gig.id}>
+                                            <td className="border border-gray-200 px-3 py-2">{gig.freelancerName || "Unassigned"}</td>
+                                            <td className="border border-gray-200 px-3 py-2">{gig.jobType}</td>
+                                            <td className="border border-gray-200 px-3 py-2">{gig.businessName}</td>
+                                            <td className="border border-gray-200 px-3 py-2">₹{gig.budget}</td>
+                                            <td className="border border-gray-200 px-3 py-2">Pending</td>
+                                        </tr>
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>
@@ -209,7 +183,7 @@ const Settlement = () => {
                             <div key={summary.makerName} className="report-card rounded-[12px] border border-gray-200 p-4">
                                 <h3 className="font-bold text-gray-900">{summary.makerName}</h3>
                                 <p className="text-sm text-gray-600 mt-2">Units sold: {summary.unitsSold}</p>
-                                <p className="text-sm text-gray-600">Total owed: INR {summary.totalOwed}</p>
+                                <p className="text-sm text-gray-600">Total owed: ₹{summary.totalOwed}</p>
                                 <p className="text-sm font-semibold mt-2">{summary.paid ? "Paid" : "Pending"}</p>
                             </div>
                         ))}

@@ -21,7 +21,7 @@ const ConsignmentTable = ({ consignments, products = [], shops = [] }) => {
     if (consignments.length === 0) {
         return (
             <div className="text-center py-12 bg-white rounded-[12px] border border-gray-200">
-                <p className="text-gray-500">No active consignments. Start by logging a drop-off!</p>
+                <p className="text-gray-500">No drop-offs yet</p>
             </div>
         );
     }
