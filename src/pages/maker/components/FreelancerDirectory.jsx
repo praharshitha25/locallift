@@ -68,7 +68,7 @@ const FreelancerDirectory = ({ freelancers, onHire }) => {
                             </div>
 
                             <div className="bg-gray-50 rounded-lg p-3 mb-4">
-                                <p className="text-gray-600 text-xs font-medium mb-1">RATE PER GIG</p>
+                                <p className="text-gray-600 text-xs font-medium mb-1">RATE PER PROJECT</p>
                                 <p className="text-2xl font-bold text-[#2D6A4F]">₹{freelancer.ratePerGig}</p>
                             </div>
 
@@ -108,7 +108,7 @@ const FreelancerDirectory = ({ freelancers, onHire }) => {
                         </div>
                         {submitted ? (
                             <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700">
-                                Request sent. It will appear in the freelancer gig list.
+                                Request sent. It will appear in the freelancer project list.
                             </div>
                         ) : (
                             <form onSubmit={handleSubmit} className="space-y-4">

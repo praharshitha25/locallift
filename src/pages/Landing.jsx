@@ -172,7 +172,7 @@ const Landing = () => {
             </h3>
 
             <p className="text-[#4c5e50] leading-relaxed">
-              Creative freelancers need paid gigs,
+              Creative freelancers need paid projects,
               portfolio work, and local business opportunities.
             </p>
           </div>
@@ -368,7 +368,7 @@ const Landing = () => {
               </h3>
 
               <p className="text-[#4c5e50]">
-                Get real paid gigs creating content
+                Get real paid projects creating content
                 for neighborhood businesses.
               </p>
             </div>

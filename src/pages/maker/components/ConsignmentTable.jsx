@@ -2,8 +2,10 @@ import { useState } from "react";
 
 const sameId = (left, right) => String(left) === String(right);
 
-const ConsignmentTable = ({ consignments, products = [], shops = [] }) => {
+const ConsignmentTable = ({ consignments, products = [], shops = [], onConfirmPayment, onToggleNoDue }) => {
     const [expandedId, setExpandedId] = useState(null);
+    const [confirmingId, setConfirmingId] = useState(null);
+    const [togglingNoDueId, setTogglingNoDueId] = useState(null);
 
     const getStatusColor = (status) => {
         switch (status) {
@@ -38,6 +40,7 @@ const ConsignmentTable = ({ consignments, products = [], shops = [] }) => {
                             <th className="px-6 py-3 text-left font-semibold text-gray-700">Sold</th>
                             <th className="px-6 py-3 text-left font-semibold text-gray-700">Remaining</th>
                             <th className="px-6 py-3 text-left font-semibold text-gray-700">Status</th>
+                            <th className="px-6 py-3 text-left font-semibold text-gray-700">Confirm Payment</th>
                             <th className="px-6 py-3 text-left font-semibold text-gray-700">Action</th>
                         </tr>
                     </thead>
@@ -60,6 +63,62 @@ const ConsignmentTable = ({ consignments, products = [], shops = [] }) => {
                                         <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getStatusColor(consignment.status)}`}>
                                             {consignment.status}
                                         </span>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex flex-col">
+                                            <div>
+                                                {consignment.paymentConfirmed ? (
+                                                    <span className="px-3 py-1 rounded-full text-xs font-semibold bg-green-100 text-green-700">Confirmed</span>
+                                                ) : (
+                                                    <button
+                                                        onClick={async (e) => {
+                                                            e.stopPropagation();
+                                                            if (typeof onConfirmPayment === "function") {
+                                                                setConfirmingId(consignment.id);
+                                                                try {
+                                                                    await onConfirmPayment(consignment);
+                                                                } catch (err) {
+                                                                    // ignore - parent will handle errors
+                                                                } finally {
+                                                                    setConfirmingId(null);
+                                                                }
+                                                            }
+                                                        }}
+                                                        disabled={confirmingId === consignment.id || consignment.status !== "Settled"}
+                                                        className={`px-3 py-1 rounded-md text-xs font-medium ${consignment.status !== "Settled" ? "bg-gray-100 text-gray-500 cursor-not-allowed" : "bg-[#2D6A4F] text-white hover:bg-[#24563f]"}`}
+                                                    >
+                                                        {confirmingId === consignment.id ? "Confirming..." : consignment.status === "Settled" ? "Confirm Payment" : "Awaiting Settlement"}
+                                                    </button>
+                                                )}
+                                            </div>
+
+                                            {/* No due indicator: show when nothing sold */}
+                                            {/* No due checkbox - makers can mark shop as paid till date */}
+                                            <div className="mt-2 text-xs text-gray-600 flex items-center gap-2">
+                                                <label className="inline-flex items-center gap-2 cursor-pointer">
+                                                    <input
+                                                        type="checkbox"
+                                                        checked={Boolean(consignment.noDue)}
+                                                        onChange={async (e) => {
+                                                            e.stopPropagation();
+                                                            if (typeof onToggleNoDue === "function") {
+                                                                setTogglingNoDueId(consignment.id);
+                                                                try {
+                                                                    await onToggleNoDue(consignment, e.target.checked);
+                                                                } catch (err) {
+                                                                    // parent handles errors
+                                                                } finally {
+                                                                    setTogglingNoDueId(null);
+                                                                }
+                                                            }
+                                                        }}
+                                                        disabled={togglingNoDueId === consignment.id}
+                                                        className="w-4 h-4 rounded border-gray-300 text-[#2D6A4F] focus:ring-[#2D6A4F]"
+                                                    />
+                                                    <span>{togglingNoDueId === consignment.id ? "Updating..." : "No due"}</span>
+                                                </label>
+                                            </div>
+                                        </div>
                                     </td>
                                     <td className="px-6 py-4">
                                         <button

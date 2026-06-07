@@ -34,14 +34,16 @@ const MakerDashboard = () => {
     const makerSalesQuery = useMemo(() => uid ? [where("makerId", "==", uid)] : emptyConstraints, [uid]);
     const shopkeeperQuery = useMemo(() => uid ? [where("role", "==", "shopkeeper")] : emptyConstraints, [uid]);
     const freelancerQuery = useMemo(() => uid ? [where("role", "==", "freelancer")] : emptyConstraints, [uid]);
+    const postedGigsQuery = useMemo(() => uid ? [where("requesterId", "==", uid)] : emptyConstraints, [uid]);
     const { items: productsList, error: productsError, loading: productsLoading } = useCollection("products", makerQuery, Boolean(uid));
     const { items: consignmentsList, error: consignmentsError, loading: consignmentsLoading } = useCollection("consignments", makerQuery, Boolean(uid));
     const { items: makerSales, error: salesError, loading: salesLoading } = useCollection("sales", makerSalesQuery, Boolean(uid));
     const { items: shopsList, error: shopsError, loading: shopsLoading } = useCollection("users", shopkeeperQuery, Boolean(uid));
     const { items: freelancersList, error: freelancersError, loading: freelancersLoading } = useCollection("users", freelancerQuery, Boolean(uid));
+    const { items: postedGigs, error: postedGigsError, loading: postedGigsLoading } = useCollection("gigs", postedGigsQuery, Boolean(uid));
 
-    const dataError = productsError || consignmentsError || salesError || shopsError || freelancersError;
-    const isLoading = productsLoading || consignmentsLoading || salesLoading || shopsLoading || freelancersLoading;
+    const dataError = productsError || consignmentsError || salesError || shopsError || freelancersError || postedGigsError;
+    const isLoading = productsLoading || consignmentsLoading || salesLoading || shopsLoading || freelancersLoading || postedGigsLoading;
     const productConsignmentsList = useMemo(
         () => consignmentsList.filter(consignment => consignment.requestType !== "connection"),
         [consignmentsList]
@@ -69,6 +71,11 @@ const MakerDashboard = () => {
             String(request.shopId) === String(shop.id) && request.status === "Connected"
         ))),
         [shopsList, connectionRequestsList]
+    );
+
+    const pendingFreelancerRequests = useMemo(
+        () => postedGigs.filter(gig => gig.status === "Applied"),
+        [postedGigs]
     );
 
     const [showAddProductModal, setShowAddProductModal] = useState(false);
@@ -276,6 +283,23 @@ const MakerDashboard = () => {
         }
     };
 
+    const handleUpdateGigStatus = async (gig, nextStatus) => {
+        setActionError("");
+
+        try {
+            await updateDoc(doc(db, "gigs", gig.id), {
+                status: nextStatus,
+                statusUpdatedAt: serverTimestamp(),
+                ...(nextStatus === "Accepted" ? { acceptedAt: serverTimestamp() } : {}),
+                ...(nextStatus === "Rejected" ? { rejectedAt: serverTimestamp() } : {})
+            });
+            return true;
+        } catch (err) {
+            setActionError(err.message || "Could not update gig status.");
+            return false;
+        }
+    };
+
     const handleAcceptConnectionRequest = async (request) => {
         setActionError("");
 
@@ -306,6 +330,36 @@ const MakerDashboard = () => {
         }
     };
 
+    const handleConfirmPayment = async (consignment) => {
+        setActionError("");
+
+        try {
+            await updateDoc(doc(db, "consignments", consignment.id), {
+                paymentConfirmed: true,
+                paymentConfirmedAt: serverTimestamp()
+            });
+            return true;
+        } catch (err) {
+            setActionError(err.message || "Could not confirm payment.");
+            throw err;
+        }
+    };
+
+    const handleToggleNoDue = async (consignment, value) => {
+        setActionError("");
+
+        try {
+            await updateDoc(doc(db, "consignments", consignment.id), {
+                noDue: Boolean(value),
+                noDueAt: serverTimestamp()
+            });
+            return true;
+        } catch (err) {
+            setActionError(err.message || "Could not update no-due status.");
+            throw err;
+        }
+    };
+
     const renderSection = () => {
         const openDropoffModal = () => {
             if (connectedShopsList.length === 0) {
@@ -327,29 +381,6 @@ const MakerDashboard = () => {
                 return (
                     <div className="space-y-6">
                         <StatsBar products={productsList} consignments={productConsignmentsList} sales={makerSales} />
-
-                        <div className="bg-white rounded-[12px] border border-gray-200 p-6 shadow-sm">
-                            <div className="flex items-center justify-between mb-4">
-                                <div>
-                                    <h2 className="text-xl font-bold text-gray-900">Connected Shops</h2>
-                                    <p className="text-sm text-gray-500">Your active shop relationships are shown here.</p>
-                                </div>
-                                <span className="text-sm font-semibold text-[#2D6A4F]">{connectedShopsList.length} connected</span>
-                            </div>
-                            {connectedShopsList.length === 0 ? (
-                                <div className="text-center py-10 text-gray-500">No connected shops yet. Accept a request or send a new shop request.</div>
-                            ) : (
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    {connectedShopsList.map(shop => (
-                                        <div key={shop.id} className="rounded-lg border border-gray-200 p-4 bg-gray-50">
-                                            <p className="font-semibold text-gray-900">{shop.name || shop.shopName || "Shopkeeper"}</p>
-                                            <p className="text-sm text-gray-600">{shop.location || shop.email || "Location unknown"}</p>
-                                            <p className="text-sm text-gray-500">{shop.type || shop.shopCategory || "Shopkeeper"}</p>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
 
                         <div>
                             <div className="flex justify-between items-center mb-4">
@@ -374,6 +405,40 @@ const MakerDashboard = () => {
                         <EarningsSummary sales={makerSales} />
                     </div>
                 );
+            case "connectedShops":
+                return (
+                    <section className="bg-white rounded-[12px] border border-gray-200 p-5 shadow-sm">
+                        <div className="flex items-center justify-between mb-4">
+                            <div>
+                                <h2 className="text-xl font-bold text-gray-900">Connected Shops</h2>
+                                <p className="text-sm text-gray-500">Your active shop relationships are shown here.</p>
+                            </div>
+                            <span className="text-sm font-semibold text-[#2D6A4F]">{connectedShopsList.length} connected</span>
+                        </div>
+                        {connectedShopsList.length === 0 ? (
+                            <div className="text-center py-10 text-gray-500">No connected shops yet. Accept a request or send a new shop request.</div>
+                        ) : (
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                                {connectedShopsList.map(shop => (
+                                    <article key={shop.id} className="rounded-lg border border-gray-200 p-4">
+                                        <div className="flex items-center gap-3 mb-3">
+                                            <img
+                                                src={shop.photoUrl || shop.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(shop.name || "Shop")}&background=2D6A4F&color=fff`}
+                                                alt={shop.name || "Shopkeeper"}
+                                                className="w-12 h-12 rounded-full bg-gray-100"
+                                            />
+                                            <div>
+                                                <p className="font-bold text-gray-900">{shop.name || shop.shopName || "Shopkeeper"}</p>
+                                                <p className="text-xs text-gray-600">{shop.location || shop.email || "Connected"}</p>
+                                            </div>
+                                        </div>
+                                        <p className="text-sm text-gray-600">Ready for product drop-offs and collaboration.</p>
+                                    </article>
+                                ))}
+                            </div>
+                        )}
+                    </section>
+                );
             case "products":
                 return (
                     <div>
@@ -395,7 +460,13 @@ const MakerDashboard = () => {
                                 + New Drop-off
                             </button>
                         </div>
-                        <ConsignmentTable consignments={productConsignmentsList} products={productsList} shops={shopsList} />
+                        <ConsignmentTable
+                            consignments={productConsignmentsList}
+                            products={productsList}
+                            shops={shopsList}
+                            onConfirmPayment={handleConfirmPayment}
+                            onToggleNoDue={handleToggleNoDue}
+                        />
                     </div>
                 );
             case "earnings":
@@ -429,9 +500,50 @@ const MakerDashboard = () => {
                 );
             case "freelancers":
                 return (
-                    <div>
-                        <h2 className="text-2xl font-bold text-gray-900 mb-6">Hire Freelancer</h2>
-                        <FreelancerDirectory freelancers={freelancersList} onHire={handleHireFreelancer} />
+                    <div className="space-y-8">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Manage Freelancer Requests</h2>
+                            {pendingFreelancerRequests.length === 0 ? (
+                                <div className="bg-white rounded-[12px] border border-gray-200 p-10 text-center text-gray-500">
+                                    No applications pending review.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-5">
+                                    {pendingFreelancerRequests.map(gig => (
+                                        <article key={gig.id} className="bg-white rounded-[12px] border border-gray-200 p-5 shadow-sm">
+                                            <div className="flex flex-col md:flex-row md:justify-between gap-4">
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-gray-900">{gig.jobType}</h3>
+                                                    <p className="text-sm text-gray-600">{gig.businessName} — INR {gig.budget}</p>
+                                                    <p className="text-sm text-gray-500 mt-2">Applicant: {gig.freelancerName || "Unknown"}</p>
+                                                    <p className="text-sm text-gray-500">Message: {gig.applicationMessage || "No message provided."}</p>
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleUpdateGigStatus(gig, "Accepted")}
+                                                        className="px-4 py-2 bg-[#2D6A4F] text-white rounded-lg hover:bg-[#24563f] transition text-sm font-medium"
+                                                    >
+                                                        Accept
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleUpdateGigStatus(gig, "Rejected")}
+                                                        className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition text-sm font-medium"
+                                                    >
+                                                        Reject
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </article>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Hire Freelancer</h2>
+                            <FreelancerDirectory freelancers={freelancersList} onHire={handleHireFreelancer} />
+                        </div>
                     </div>
                 );
             default:
@@ -463,6 +575,7 @@ const MakerDashboard = () => {
                         onSectionChange={setActiveSection}
                         maker={makerProfile}
                         onEditProfile={() => setShowProfileForm(true)}
+                        pendingRequestsCount={pendingConnectionRequests.length}
                     />
 
                     <main className="flex-1">

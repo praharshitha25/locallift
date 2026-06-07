@@ -43,7 +43,7 @@ const ShopFreelancerDirectory = ({ freelancers, onHire }) => {
                                 className="w-16 h-16 rounded-full mx-auto mb-3 border"
                             />
                             <h3 className="font-bold text-lg text-gray-900">{freelancer.name || freelancer.email || "Freelancer"}</h3>
-                            <p className="text-sm text-gray-600">INR {freelancer.ratePerGig || 0} per gig</p>
+                            <p className="text-sm text-gray-600">INR {freelancer.ratePerGig || 0} per project</p>
                         </div>
                         <div className="p-4">
                             <div className="flex flex-wrap gap-2 mb-4">
@@ -87,7 +87,7 @@ const ShopFreelancerDirectory = ({ freelancers, onHire }) => {
                         </div>
                         {submitted ? (
                             <div className="rounded-lg bg-green-50 border border-green-200 p-4 text-green-700">
-                                Request sent. {selectedFreelancer.name} will receive the job brief.
+                                Request sent. {selectedFreelancer.name} will receive the project brief.
                             </div>
                         ) : (
                             <form onSubmit={handleSubmit} className="space-y-4">

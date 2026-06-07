@@ -22,7 +22,7 @@ const roles = [
     {
         id: "freelancer",
         label: "Freelancer",
-        description: "Find nearby gigs and promote local products.",
+        description: "Find nearby projects and promote local products.",
         path: "/freelancer"
     }
 ];

@@ -1,9 +1,10 @@
-const SidebarNav = ({ activeSection, onSectionChange, maker, onEditProfile }) => {
+const SidebarNav = ({ activeSection, onSectionChange, maker, onEditProfile, pendingRequestsCount = 0 }) => {
     const navItems = [
         { id: "dashboard", label: "Dashboard", icon: "📊" },
         { id: "products", label: "My Products", icon: "📦" },
         { id: "consignments", label: "Consignments", icon: "🚚" },
         { id: "requests", label: "Incoming Requests", icon: "📩" },
+        { id: "connectedShops", label: "Connected Shops", icon: "🔗" },
         { id: "earnings", label: "Sales & Earnings", icon: "💰" },
         { id: "shops", label: "Find Shops", icon: "🏪" },
         { id: "freelancers", label: "Hire Freelancer", icon: "👥" },
@@ -35,7 +36,12 @@ const SidebarNav = ({ activeSection, onSectionChange, maker, onEditProfile }) =>
                                     }`}
                             >
                                 <span className="mr-2">{item.icon}</span>
-                                {item.label}
+                                <span className="inline-flex items-center gap-2">
+                                    <span>{item.label}</span>
+                                    {item.id === "requests" && pendingRequestsCount > 0 && (
+                                        <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                                    )}
+                                </span>
                             </button>
                         </li>
                     ))}

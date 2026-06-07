@@ -100,13 +100,13 @@ const FreelancerDashboard = () => {
     const navItems = [
         { id: "dashboard", label: "Dashboard" },
         { id: "portfolio", label: "Portfolio" },
-        { id: "gigs", label: "Available Gigs", badge: activeGigs.length },
+        { id: "gigs", label: "Available Projects", badge: activeGigs.length },
         { id: "earnings", label: "Earnings" }
     ];
 
     const stats = [
-        { label: "Active Gigs", value: myGigs.length, color: "bg-green-50", textColor: "text-green-700" },
-        { label: "Completed Gigs", value: completedGigsFromFirestore.length, color: "bg-white", textColor: "text-gray-900" },
+        { label: "Active Projects", value: myGigs.length, color: "bg-green-50", textColor: "text-green-700" },
+        { label: "Completed Projects", value: completedGigsFromFirestore.length, color: "bg-white", textColor: "text-gray-900" },
         { label: "Earnings This Week", value: `INR ${earningsThisWeek.toLocaleString()}`, color: "bg-orange-50", textColor: "text-orange-700" },
         { label: "Portfolio Items", value: portfolios.length, color: "bg-green-50", textColor: "text-green-700" }
     ];
@@ -217,9 +217,9 @@ const FreelancerDashboard = () => {
 
     const renderGigs = () => (
         <section>
-            <h2 className="text-xl font-bold text-gray-900 mb-4">Available Gigs</h2>
+            <h2 className="text-xl font-bold text-gray-900 mb-4">Available Projects</h2>
             {openGigs.length === 0 ? (
-                <div className="bg-white rounded-[12px] border border-gray-200 p-10 text-center text-gray-500">No gigs available right now</div>
+                <div className="bg-white rounded-[12px] border border-gray-200 p-10 text-center text-gray-500">No projects available right now</div>
             ) : (
                 <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">
                     {openGigs.map(gig => (
@@ -295,7 +295,7 @@ const FreelancerDashboard = () => {
             </div>
 
             <div className="bg-white rounded-[12px] border border-gray-200 p-6">
-                <h2 className="text-xl font-bold text-gray-900 mb-4">Completed Gigs</h2>
+                <h2 className="text-xl font-bold text-gray-900 mb-4">Completed Projects</h2>
                 <div className="space-y-3">
                     {completedGigs.map(gig => (
                         <div key={gig.id} className="flex items-center justify-between gap-4 rounded-lg bg-gray-50 p-4">
@@ -402,7 +402,7 @@ const FreelancerDashboard = () => {
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                     <div className="bg-white rounded-[12px] shadow-lg w-full max-w-md p-6">
                         <div className="flex items-center justify-between mb-4">
-                            <h2 className="text-xl font-bold text-gray-900">Apply to Gig</h2>
+                            <h2 className="text-xl font-bold text-gray-900">Apply to Project</h2>
                             <button type="button" onClick={() => setSelectedGig(null)} className="text-2xl text-gray-500">x</button>
                         </div>
                         {applySubmitted ? (

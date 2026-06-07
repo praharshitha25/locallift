@@ -451,7 +451,7 @@ const ProfileForm = ({ role, initialData, onSave, isSaving, message, onCancel })
                         <>
                             <div className="grid gap-6 sm:grid-cols-2">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Rate Per Gig (INR)</label>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Rate Per Project (INR)</label>
                                     <input
                                         value={formData.ratePerGig}
                                         onChange={(e) => updateField("ratePerGig", e.target.value)}

@@ -32,6 +32,7 @@ const ShopDashboard = () => {
     const shopSalesQuery = useMemo(() => uid ? [where("shopId", "==", uid)] : emptyConstraints, [uid]);
     const makerQuery = useMemo(() => uid ? [where("role", "==", "maker")] : emptyConstraints, [uid]);
     const freelancerQuery = useMemo(() => uid ? [where("role", "==", "freelancer")] : emptyConstraints, [uid]);
+    const postedGigsQuery = useMemo(() => uid ? [where("requesterId", "==", uid)] : emptyConstraints, [uid]);
     const [activeSection, setActiveSection] = useState("dashboard");
     const [selectedSaleItem, setSelectedSaleItem] = useState(null);
     const [actionError, setActionError] = useState("");
@@ -45,6 +46,7 @@ const ShopDashboard = () => {
     const { items: salesDocs, error: salesError, loading: salesLoading } = useCollection("sales", shopSalesQuery, Boolean(uid));
     const { items: makerDocs, error: makerError, loading: makerLoading } = useCollection("users", makerQuery, Boolean(uid));
     const { items: freelancerDocs, error: freelancerError, loading: freelancerLoading } = useCollection("users", freelancerQuery, Boolean(uid));
+    const { items: postedGigs, error: postedGigsError, loading: postedGigsLoading } = useCollection("gigs", postedGigsQuery, Boolean(uid));
 
     const enrichedConsignments = useMemo(
         () => consignmentDocs.map(consignment => enrichConsignment(consignment, {
@@ -63,8 +65,12 @@ const ShopDashboard = () => {
         ...sale,
         paid: Boolean(sale.paid)
     }));
-    const dataError = consignmentError || productError || salesError || makerError || freelancerError;
-    const isLoading = consignmentLoading || productLoading || salesLoading || makerLoading || freelancerLoading;
+    const pendingFreelancerRequests = useMemo(
+        () => postedGigs.filter(gig => gig.status === "Applied"),
+        [postedGigs]
+    );
+    const dataError = consignmentError || productError || salesError || makerError || freelancerError || postedGigsError;
+    const isLoading = consignmentLoading || productLoading || salesLoading || makerLoading || freelancerLoading || postedGigsLoading;
 
     useEffect(() => {
         document.title = "Shopkeeper Dashboard - Local Lift";
@@ -306,6 +312,23 @@ const ShopDashboard = () => {
         }
     };
 
+    const handleUpdateGigStatus = async (gig, nextStatus) => {
+        setActionError("");
+
+        try {
+            await updateDoc(doc(db, "gigs", gig.id), {
+                status: nextStatus,
+                statusUpdatedAt: serverTimestamp(),
+                ...(nextStatus === "Accepted" ? { acceptedAt: serverTimestamp() } : {}),
+                ...(nextStatus === "Rejected" ? { rejectedAt: serverTimestamp() } : {})
+            });
+            return true;
+        } catch (err) {
+            setActionError(err.message || "Could not update gig status.");
+            return false;
+        }
+    };
+
     const handleConnectMaker = async (maker) => {
         setActionError("");
         const existingRequest = connectionRequestsList.find(request => (
@@ -376,7 +399,53 @@ const ShopDashboard = () => {
             case "settlement":
                 return <SettlementSummary settlements={settlements} sales={shopSales} onMarkPaid={handleMarkPaid} />;
             case "freelancers":
-                return <ShopFreelancerDirectory freelancers={freelancerDocs} onHire={handleHireFreelancer} />;
+                return (
+                    <div className="space-y-8">
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Manage Freelancer Requests</h2>
+                            {pendingFreelancerRequests.length === 0 ? (
+                                <div className="bg-white rounded-[12px] border border-gray-200 p-10 text-center text-gray-500">
+                                    No freelancer applications are pending review.
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 gap-5">
+                                    {pendingFreelancerRequests.map(gig => (
+                                        <article key={gig.id} className="bg-white rounded-[12px] border border-gray-200 p-5 shadow-sm">
+                                            <div className="flex flex-col md:flex-row md:justify-between gap-4">
+                                                <div>
+                                                    <h3 className="text-lg font-bold text-gray-900">{gig.jobType}</h3>
+                                                    <p className="text-sm text-gray-600">{gig.businessName} — INR {gig.budget}</p>
+                                                    <p className="text-sm text-gray-500 mt-2">Applicant: {gig.freelancerName || "Unknown"}</p>
+                                                    <p className="text-sm text-gray-500">Message: {gig.applicationMessage || "No message provided."}</p>
+                                                </div>
+                                                <div className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleUpdateGigStatus(gig, "Accepted")}
+                                                        className="px-4 py-2 bg-[#2D6A4F] text-white rounded-lg hover:bg-[#24563f] transition text-sm font-medium"
+                                                    >
+                                                        Accept
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => handleUpdateGigStatus(gig, "Rejected")}
+                                                        className="px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition text-sm font-medium"
+                                                    >
+                                                        Reject
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </article>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                        <div>
+                            <h2 className="text-2xl font-bold text-gray-900 mb-6">Hire Freelancer</h2>
+                            <ShopFreelancerDirectory freelancers={freelancerDocs} onHire={handleHireFreelancer} />
+                        </div>
+                    </div>
+                );
             default:
                 return null;
         }
@@ -449,7 +518,12 @@ const ShopDashboard = () => {
                                             onClick={() => setActiveSection(item.id)}
                                             className={`w-full flex items-center justify-between text-left px-3 py-3 rounded-lg transition text-sm font-medium ${activeSection === item.id ? "bg-[#2D6A4F] text-white" : "text-gray-700 hover:bg-gray-100"}`}
                                         >
-                                            <span>{item.label}</span>
+                                            <span className="inline-flex items-center gap-2">
+                                                <span>{item.label}</span>
+                                                {item.id === "requests" && pendingRequests.length > 0 && (
+                                                    <span className="w-2 h-2 rounded-full bg-green-500 inline-block" />
+                                                )}
+                                            </span>
                                             {item.badge > 0 && <span className="ml-2 rounded-full bg-[#F4A261] px-2 py-0.5 text-xs font-bold text-white">{item.badge}</span>}
                                         </button>
                                     </li>

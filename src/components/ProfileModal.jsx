@@ -301,7 +301,7 @@ const ProfileModal = ({ role, isOpen, initialData, onClose, onSave, message, isS
                                 <input value={formData.location} onChange={(e) => updateField("location", e.target.value)} type="text" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700">Rate per gig (INR)</label>
+                                <label className="block text-sm font-medium text-gray-700">Rate per project (INR)</label>
                                 <input value={formData.ratePerGig} onChange={(e) => updateField("ratePerGig", e.target.value)} type="number" min="0" className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]" />
                             </div>
                         </div>
