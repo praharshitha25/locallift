@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import Navbar from "../../components/Navbar";
-import { addDoc, collection, deleteDoc, doc, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { addDoc, collection, deleteDoc, doc, serverTimestamp, setDoc, updateDoc, where, runTransaction } from "firebase/firestore";
 import { db } from "../../firebase/config";
 import { useAuth } from "../../auth/AuthContext";
 import { emptyConstraints, useCollection } from "../../firebase/firestoreHooks";
+import ProfileForm from "../../components/ProfileForm";
 import StatsBar from "./components/StatsBar";
 import ProductGrid from "./components/ProductGrid";
 import AddProductModal from "./components/AddProductModal";
@@ -22,8 +23,9 @@ const MakerDashboard = () => {
         name: userDoc?.name || currentUser?.displayName || currentUser?.email || "Maker",
         email: userDoc?.email || currentUser?.email || "",
         location: userDoc?.location || "Kurnool",
+        businessName: userDoc?.brandName || userDoc?.name || "Maker",
         rating: userDoc?.rating || "New",
-        photoUrl: userDoc?.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc?.name || "Maker")}&background=2D6A4F&color=fff`
+        photoUrl: userDoc?.photoURL || userDoc?.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc?.name || "Maker")}&background=2D6A4F&color=fff`
     };
 
     const makerQuery = useMemo(() => uid ? [where("makerId", "==", uid)] : emptyConstraints, [uid]);
@@ -55,12 +57,40 @@ const MakerDashboard = () => {
 
     const [showAddProductModal, setShowAddProductModal] = useState(false);
     const [showLogDropoffModal, setShowLogDropoffModal] = useState(false);
+    const [showProfileForm, setShowProfileForm] = useState(false);
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
+    const [profileSaveMessage, setProfileSaveMessage] = useState("");
+    const [profileSaveError, setProfileSaveError] = useState("");
     const [activeSection, setActiveSection] = useState("dashboard");
     const [actionError, setActionError] = useState("");
 
     useEffect(() => {
         document.title = "Maker Dashboard - Local Lift";
     }, []);
+
+    // Profile form is optional - users can click Edit Profile button to fill it out
+    // No automatic prompt on login
+
+    const saveProfileData = async (profileData) => {
+        setProfileSaveError("");
+        setProfileSaveMessage("");
+        setIsSavingProfile(true);
+
+        try {
+            await setDoc(doc(db, "users", uid), {
+                ...profileData,
+                profileComplete: true,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+            setProfileSaveMessage("Profile updated successfully!");
+            setShowProfileForm(false);
+            setTimeout(() => setProfileSaveMessage(""), 3000);
+        } catch (err) {
+            setProfileSaveError(err.message || "Could not save profile.");
+        } finally {
+            setIsSavingProfile(false);
+        }
+    };
 
     const handleAddProduct = async (newProduct) => {
         setActionError("");
@@ -142,10 +172,29 @@ const MakerDashboard = () => {
         };
 
         try {
-            await addDoc(collection(db, "consignments"), {
-                ...consignment,
-                createdAt: serverTimestamp()
+            const consignmentRef = doc(collection(db, "consignments"));
+
+            await runTransaction(db, async (tx) => {
+                const productRef = doc(db, "products", selectedProduct.id);
+
+                // read current product quantity first (Firestore requires reads before writes)
+                const prodSnap = await tx.get(productRef);
+                if (!prodSnap.exists()) throw new Error("Product not found");
+                const currentQty = Number(prodSnap.data().quantity || 0);
+                const newQty = currentQty - Number(newDropoff.quantityDropped || 0);
+
+                // now perform writes
+                tx.set(consignmentRef, {
+                    ...consignment,
+                    createdAt: serverTimestamp()
+                });
+
+                tx.update(productRef, {
+                    quantity: newQty >= 0 ? newQty : 0,
+                    updatedAt: serverTimestamp()
+                });
             });
+
             setShowLogDropoffModal(false);
             return true;
         } catch (err) {
@@ -313,27 +362,58 @@ const MakerDashboard = () => {
     return (
         <div className="min-h-screen bg-[#F5F5F0]">
             <Navbar />
-            <div className="flex flex-col lg:flex-row gap-6 p-4 sm:p-6 max-w-7xl mx-auto">
-                <SidebarNav activeSection={activeSection} onSectionChange={setActiveSection} maker={makerProfile} />
 
-                <main className="flex-1">
-                    {dataError && (
-                        <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-                            {dataError}
-                        </div>
-                    )}
-                    {actionError && (
-                        <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
-                            {actionError}
-                        </div>
-                    )}
-                    {isLoading ? (
-                        <div className="bg-white rounded-[12px] border border-gray-200 p-10 text-center text-gray-500">
-                            Loading maker data...
-                        </div>
-                    ) : renderSection()}
-                </main>
-            </div>
+            {/* Show profile form if needed */}
+            {showProfileForm && (
+                <ProfileForm
+                    role="maker"
+                    initialData={userDoc || {}}
+                    onSave={saveProfileData}
+                    isSaving={isSavingProfile}
+                    message="Complete your profile to get started"
+                    onCancel={null}
+                />
+            )}
+
+            {/* Show dashboard if profile is complete */}
+            {!showProfileForm && (
+                <div className="flex flex-col lg:flex-row gap-6 p-4 sm:p-6 max-w-7xl mx-auto">
+                    <SidebarNav
+                        activeSection={activeSection}
+                        onSectionChange={setActiveSection}
+                        maker={makerProfile}
+                        onEditProfile={() => setShowProfileForm(true)}
+                    />
+
+                    <main className="flex-1">
+                        {dataError && (
+                            <div className="mb-4 rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                                {dataError}
+                            </div>
+                        )}
+                        {profileSaveMessage && (
+                            <div className="mb-4 rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">
+                                {profileSaveMessage}
+                            </div>
+                        )}
+                        {profileSaveError && (
+                            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                {profileSaveError}
+                            </div>
+                        )}
+                        {actionError && (
+                            <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                                {actionError}
+                            </div>
+                        )}
+                        {isLoading ? (
+                            <div className="bg-white rounded-[12px] border border-gray-200 p-10 text-center text-gray-500">
+                                Loading maker data...
+                            </div>
+                        ) : renderSection()}
+                    </main>
+                </div>
+            )}
 
             {showAddProductModal && (
                 <AddProductModal

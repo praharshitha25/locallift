@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { X } from "lucide-react";
 import { Link } from "react-router-dom";
-import { addDoc, collection, doc, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { addDoc, collection, doc, serverTimestamp, setDoc, updateDoc, where } from "firebase/firestore";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import Navbar from "../../components/Navbar";
+import ProfileForm from "../../components/ProfileForm";
 import { db } from "../../firebase/config";
 import { useAuth } from "../../auth/AuthContext";
 import { emptyConstraints, useCollection } from "../../firebase/firestoreHooks";
@@ -33,7 +34,8 @@ const FreelancerDashboard = () => {
         name: userDoc?.name || currentUser?.displayName || currentUser?.email || "Freelancer",
         email: userDoc?.email || currentUser?.email || "",
         location: userDoc?.location || "Kurnool",
-        photoUrl: userDoc?.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc?.name || "Freelancer")}&background=2D6A4F&color=fff`,
+        brandName: userDoc?.brandName || userDoc?.shopName || userDoc?.name || "Freelancer",
+        photoUrl: userDoc?.photoURL || userDoc?.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc?.name || "Freelancer")}&background=2D6A4F&color=fff`,
         rating: userDoc?.rating || "New"
     };
     const [activeSection, setActiveSection] = useState("dashboard");
@@ -46,6 +48,10 @@ const FreelancerDashboard = () => {
     const [actionError, setActionError] = useState("");
     const [isSavingPortfolio, setIsSavingPortfolio] = useState(false);
     const [portfolioPreview, setPortfolioPreview] = useState("");
+    const [showProfileForm, setShowProfileForm] = useState(false);
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
+    const [profileSaveMessage, setProfileSaveMessage] = useState("");
+    const [profileSaveError, setProfileSaveError] = useState("");
     const portfolioQuery = useMemo(() => uid ? [where("freelancerId", "==", uid)] : emptyConstraints, [uid]);
     const myGigsQuery = useMemo(() => uid ? [where("freelancerId", "==", uid)] : emptyConstraints, [uid]);
     const openGigsQuery = useMemo(() => uid ? [where("status", "==", "Open")] : emptyConstraints, [uid]);
@@ -59,6 +65,30 @@ const FreelancerDashboard = () => {
     useEffect(() => {
         document.title = "Freelancer Dashboard — Local Lift";
     }, []);
+
+    // Profile form is optional - users can click Edit Profile button to fill it out
+    // No automatic prompt on login
+
+    const saveProfileData = async (profileData) => {
+        setProfileSaveError("");
+        setProfileSaveMessage("");
+        setIsSavingProfile(true);
+
+        try {
+            await setDoc(doc(db, "users", uid), {
+                ...profileData,
+                profileComplete: true,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+            setProfileSaveMessage("Profile updated successfully!");
+            setShowProfileForm(false);
+            setTimeout(() => setProfileSaveMessage(""), 3000);
+        } catch (err) {
+            setProfileSaveError(err.message || "Could not save profile.");
+        } finally {
+            setIsSavingProfile(false);
+        }
+    };
 
     const completedGigsFromFirestore = myGigs.filter(gig => gig.status === "Completed");
     const activeGigs = myGigs.filter(gig => gig.status !== "Completed");
@@ -303,47 +333,70 @@ const FreelancerDashboard = () => {
     return (
         <div className="min-h-screen bg-[#F5F5F0]">
             <Navbar />
-            <div className="max-w-7xl mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-6">
-                <aside className="w-full lg:w-64 flex flex-col">
-                    <div className="bg-white rounded-[12px] border border-gray-200 p-4 mb-6">
-                        <h1 className="text-xl font-bold text-[#2D6A4F]">Local Lift</h1>
-                    </div>
-                    <nav className="bg-white rounded-[12px] border border-gray-200 p-3 mb-6 flex-1">
-                        <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-2">
-                            {navItems.map(item => (
-                                <li key={item.id}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveSection(item.id)}
-                                        className={`w-full flex items-center justify-between text-left px-3 py-3 rounded-lg transition text-sm font-medium ${activeSection === item.id ? "bg-[#2D6A4F] text-white" : "text-gray-700 hover:bg-gray-100"}`}
-                                    >
-                                        <span>{item.label}</span>
-                                        {item.badge > 0 && <span className="ml-2 rounded-full bg-[#F4A261] px-2 py-0.5 text-xs font-bold text-white">{item.badge}</span>}
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    </nav>
-                    <div className="bg-white rounded-[12px] border border-gray-200 p-4">
-                        <div className="flex items-center gap-3 mb-3">
-                            <img src={currentFreelancer.photoUrl} alt={currentFreelancer.name} className="w-12 h-12 rounded-full bg-gray-100" />
-                            <div>
-                                <p className="font-bold text-gray-900">{currentFreelancer.name}</p>
-                                <p className="text-xs text-gray-600">Freelancer | {currentFreelancer.location}</p>
-                            </div>
-                        </div>
-                        <p className="text-xs font-semibold text-gray-900 mb-4">{currentFreelancer.rating} rating</p>
-                        <button className="w-full px-3 py-2 border border-[#2D6A4F] text-[#2D6A4F] rounded-lg hover:bg-[#f0f5f3] transition font-medium text-sm">Edit Profile</button>
-                    </div>
-                </aside>
 
-                <main className="flex-1 space-y-6">
-                    {dataError && <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">{dataError}</div>}
-                    {actionError && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>}
-                    {activeSection !== "dashboard" && !loading && renderStats()}
-                    {renderSection()}
-                </main>
-            </div>
+            {/* Show profile form if needed */}
+            {showProfileForm && (
+                <ProfileForm
+                    role="freelancer"
+                    initialData={userDoc || {}}
+                    onSave={saveProfileData}
+                    isSaving={isSavingProfile}
+                    message="Complete your profile to get started"
+                    onCancel={null}
+                />
+            )}
+
+            {/* Show dashboard if profile is complete */}
+            {!showProfileForm && (
+                <div className="max-w-7xl mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-6">
+                    <aside className="w-full lg:w-64 flex flex-col">
+                        <div className="bg-white rounded-[12px] border border-gray-200 p-4 mb-6">
+                            <h1 className="text-xl font-bold text-[#2D6A4F]">Local Lift</h1>
+                        </div>
+                        <nav className="bg-white rounded-[12px] border border-gray-200 p-3 mb-6 flex-1">
+                            <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-2">
+                                {navItems.map(item => (
+                                    <li key={item.id}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveSection(item.id)}
+                                            className={`w-full flex items-center justify-between text-left px-3 py-3 rounded-lg transition text-sm font-medium ${activeSection === item.id ? "bg-[#2D6A4F] text-white" : "text-gray-700 hover:bg-gray-100"}`}
+                                        >
+                                            <span>{item.label}</span>
+                                            {item.badge > 0 && <span className="ml-2 rounded-full bg-[#F4A261] px-2 py-0.5 text-xs font-bold text-white">{item.badge}</span>}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </nav>
+                        <div className="bg-white rounded-[12px] border border-gray-200 p-4">
+                            <div className="flex items-center gap-3 mb-3">
+                                <img src={currentFreelancer.photoUrl} alt={currentFreelancer.name} className="w-12 h-12 rounded-full bg-gray-100" />
+                                <div>
+                                    <p className="font-bold text-gray-900">{currentFreelancer.name}</p>
+                                    <p className="text-xs text-gray-600">Freelancer | {currentFreelancer.location}</p>
+                                    <p className="text-xs text-gray-500">{currentFreelancer.brandName}</p>
+                                </div>
+                            </div>
+                            <p className="text-xs font-semibold text-gray-900 mb-4">{currentFreelancer.rating} rating</p>
+                            <button
+                                type="button"
+                                onClick={() => setShowProfileForm(true)}
+                                className="w-full px-3 py-2 border border-[#2D6A4F] text-[#2D6A4F] rounded-lg hover:bg-[#f0f5f3] transition font-medium text-sm"
+                            >Edit Profile</button>
+                        </div>
+                    </aside>
+
+                    <main className="flex-1 space-y-6">
+                        {dataError && <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">{dataError}</div>}
+                        {profileSaveMessage && <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{profileSaveMessage}</div>}
+                        {profileSaveError && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{profileSaveError}</div>}
+                        {actionError && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>}
+                        {activeSection !== "dashboard" && !loading && renderStats()}
+                        {renderSection()}
+                    </main>
+                </div>
+            )}
 
             {selectedGig && (
                 <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

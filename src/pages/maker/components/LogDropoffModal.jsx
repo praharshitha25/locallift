@@ -1,25 +1,17 @@
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 
 const sameId = (left, right) => String(left) === String(right);
 
 const LogDropoffModal = ({ products, shops, onClose, onSubmit }) => {
     const [formData, setFormData] = useState({
-        shopId: shops[0]?.id || "",
-        productId: products[0]?.id || "",
+        shopId: "",
+        productId: "",
         quantityDropped: "",
         splitPercentage: 50,
         notes: ""
     });
     const [isSubmitting, setIsSubmitting] = useState(false);
-
-    useEffect(() => {
-        setFormData(prev => ({
-            ...prev,
-            shopId: shops[0]?.id || "",
-            productId: products[0]?.id || ""
-        }));
-    }, [shops, products]);
 
     const handleChange = (e) => {
         const { name, value } = e.target;

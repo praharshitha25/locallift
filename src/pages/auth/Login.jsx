@@ -81,7 +81,9 @@ const Login = () => {
                     email: formData.email,
                     role: activeRole.id,
                     photoUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=2D6A4F&color=fff`,
+                    photoURL: `https://ui-avatars.com/api/?name=${encodeURIComponent(formData.name)}&background=2D6A4F&color=fff`,
                     location: "Kurnool",
+                    profileComplete: false,
                     ...(roleDefaults[activeRole.id] || {}),
                     createdAt: serverTimestamp()
                 });

@@ -46,7 +46,16 @@ export const AuthProvider = ({ children }) => {
             unsubscribeUser = onSnapshot(
                 userRef,
                 (snapshot) => {
-                    setUserDoc(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null);
+                    if (snapshot.exists()) {
+                        const userData = snapshot.data() || {};
+                        setUserDoc({
+                            id: snapshot.id,
+                            profileComplete: userData.profileComplete ?? false,
+                            ...userData
+                        });
+                    } else {
+                        setUserDoc(null);
+                    }
                     setLoading(false);
                 },
                 (snapshotError) => {

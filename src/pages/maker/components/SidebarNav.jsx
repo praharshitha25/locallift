@@ -1,4 +1,4 @@
-const SidebarNav = ({ activeSection, onSectionChange, maker }) => {
+const SidebarNav = ({ activeSection, onSectionChange, maker, onEditProfile }) => {
     const navItems = [
         { id: "dashboard", label: "Dashboard", icon: "📊" },
         { id: "products", label: "My Products", icon: "📦" },
@@ -7,6 +7,12 @@ const SidebarNav = ({ activeSection, onSectionChange, maker }) => {
         { id: "shops", label: "Find Shops", icon: "🏪" },
         { id: "freelancers", label: "Hire Freelancer", icon: "👥" },
     ];
+
+    const handleEditProfile = () => {
+        if (typeof onEditProfile === "function") {
+            onEditProfile();
+        }
+    };
 
     return (
         <aside className="w-full lg:w-64 flex flex-col">
@@ -46,13 +52,20 @@ const SidebarNav = ({ activeSection, onSectionChange, maker }) => {
                     <div className="flex-1">
                         <p className="font-bold text-gray-900 text-sm">{maker.name}</p>
                         <p className="text-xs text-gray-600">Maker • {maker.location}</p>
+                        {maker.businessName && maker.businessName !== maker.name && (
+                            <p className="text-xs text-gray-500">{maker.businessName}</p>
+                        )}
                     </div>
                 </div>
                 <div className="flex items-center gap-1 mb-4 text-xs">
                     <span>⭐</span>
                     <span className="font-semibold text-gray-900">{maker.rating} rating</span>
                 </div>
-                <button className="w-full px-3 py-2 border border-[#2D6A4F] text-[#2D6A4F] rounded-lg hover:bg-[#f0f5f3] transition font-medium text-sm">
+                <button
+                    type="button"
+                    onClick={handleEditProfile}
+                    className="w-full px-3 py-2 border border-[#2D6A4F] text-[#2D6A4F] rounded-lg hover:bg-[#f0f5f3] transition font-medium text-sm"
+                >
                     Edit Profile
                 </button>
             </div>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { addDoc, collection, doc, serverTimestamp, updateDoc, where } from "firebase/firestore";
+import { addDoc, collection, doc, serverTimestamp, setDoc, updateDoc, where, runTransaction } from "firebase/firestore";
 import Navbar from "../../components/Navbar";
+import ProfileForm from "../../components/ProfileForm";
 import { db } from "../../firebase/config";
 import { useAuth } from "../../auth/AuthContext";
 import { emptyConstraints, useCollection } from "../../firebase/firestoreHooks";
@@ -11,6 +12,7 @@ import ShelfInventory from "./components/ShelfInventory";
 import ShopFreelancerDirectory from "./components/ShopFreelancerDirectory";
 import ShopStatsBar from "./components/ShopStatsBar";
 import { enrichConsignment, sameId } from "./components/shopDataHelpers";
+import { createInventoryForConsignment, updateInventorySale } from "../../firebase/dbHelpers";
 
 const ShopDashboard = () => {
     const { currentUser, userDoc } = useAuth();
@@ -20,7 +22,8 @@ const ShopDashboard = () => {
         name: userDoc?.name || currentUser?.displayName || currentUser?.email || "Your Shop",
         email: userDoc?.email || currentUser?.email || "",
         location: userDoc?.location || "Kurnool",
-        photoUrl: userDoc?.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc?.name || "Shop")}&background=2D6A4F&color=fff`
+        businessName: userDoc?.shopName || userDoc?.name || "Your Shop",
+        photoUrl: userDoc?.photoURL || userDoc?.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc?.name || "Shop")}&background=2D6A4F&color=fff`
     };
 
     const shopQuery = useMemo(() => uid ? [where("shopId", "==", uid)] : emptyConstraints, [uid]);
@@ -31,6 +34,10 @@ const ShopDashboard = () => {
     const [selectedSaleItem, setSelectedSaleItem] = useState(null);
     const [actionError, setActionError] = useState("");
     const [paidSaleIds, setPaidSaleIds] = useState([]);
+    const [showProfileForm, setShowProfileForm] = useState(false);
+    const [isSavingProfile, setIsSavingProfile] = useState(false);
+    const [profileSaveMessage, setProfileSaveMessage] = useState("");
+    const [profileSaveError, setProfileSaveError] = useState("");
 
     const { items: consignmentDocs, error: consignmentError, loading: consignmentLoading } = useCollection("consignments", shopQuery, Boolean(uid));
     const { items: productDocs, error: productError, loading: productLoading } = useCollection("products", emptyConstraints, Boolean(uid));
@@ -61,6 +68,30 @@ const ShopDashboard = () => {
     useEffect(() => {
         document.title = "Shopkeeper Dashboard - Local Lift";
     }, []);
+
+    // Profile form is optional - users can click Edit Profile button to fill it out
+    // No automatic prompt on login
+
+    const saveProfileData = async (profileData) => {
+        setProfileSaveError("");
+        setProfileSaveMessage("");
+        setIsSavingProfile(true);
+
+        try {
+            await setDoc(doc(db, "users", uid), {
+                ...profileData,
+                profileComplete: true,
+                updatedAt: serverTimestamp()
+            }, { merge: true });
+            setProfileSaveMessage("Profile updated successfully!");
+            setShowProfileForm(false);
+            setTimeout(() => setProfileSaveMessage(""), 3000);
+        } catch (err) {
+            setProfileSaveError(err.message || "Could not save profile.");
+        } finally {
+            setIsSavingProfile(false);
+        }
+    };
 
     const settlements = useMemo(() => {
         const rows = new Map();
@@ -96,9 +127,36 @@ const ShopDashboard = () => {
         setActionError("");
 
         try {
-            await updateDoc(doc(db, "consignments", request.id), {
-                status: request.requestType === "connection" ? "Connected" : "Active",
-                acceptedAt: serverTimestamp()
+            const consignmentRef = doc(db, "consignments", request.id);
+            const inventoryRef = doc(db, "inventory", request.id);
+
+            await runTransaction(db, async (tx) => {
+                tx.update(consignmentRef, {
+                    status: request.requestType === "connection" ? "Connected" : "Active",
+                    acceptedAt: serverTimestamp()
+                });
+
+                if (request.requestType !== "connection") {
+                    // create inventory doc atomically
+                    tx.set(inventoryRef, {
+                        consignmentId: request.id,
+                        shopId: request.shopId,
+                        shopName: request.shopName,
+                        makerId: request.makerId,
+                        makerName: request.makerName,
+                        productId: request.productId,
+                        productName: request.productName || request.product?.name || "Unknown Product",
+                        productImageUrl: request.productImageUrl || request.product?.imageUrl || request.product?.image || request.product?.photoUrl || request.product?.photo || "",
+                        quantityRemaining: Number(request.quantityRemaining || request.quantityDropped || 0),
+                        quantitySold: Number(request.quantitySold || 0),
+                        totalQuantity: Number(request.quantityRemaining || request.quantityDropped || 0) + Number(request.quantitySold || 0),
+                        makerPercent: Number(request.makerPercent ?? request.splitPercentage ?? 50),
+                        shopPercent: Number(request.shopPercent ?? 100 - (request.makerPercent ?? request.splitPercentage ?? 50)),
+                        status: "Active",
+                        acceptedAt: serverTimestamp(),
+                        createdAt: serverTimestamp()
+                    });
+                }
             });
         } catch (err) {
             setActionError(err.message || "Could not accept request.");
@@ -127,32 +185,80 @@ const ShopDashboard = () => {
         }
 
         try {
+            const consignmentRef = doc(db, "consignments", item.id);
+            const inventoryRef = doc(db, "inventory", item.id);
+            const saleRef = doc(collection(db, "sales"));
             const nextSold = item.quantitySold + saleData.quantitySold;
             const nextRemaining = item.quantityRemaining - saleData.quantitySold;
 
-            await addDoc(collection(db, "sales"), {
-                consignmentId: item.id,
-                shopId: uid,
-                shopName: currentShop.name,
-                productId: item.productId,
-                productName: item.product?.name || item.productName || "Unknown Product",
-                makerId: item.makerId || item.product?.makerId,
-                makerName: item.maker?.name || item.makerName || "Unknown Maker",
-                quantitySold: saleData.quantitySold,
-                totalRevenue: saleData.totalRevenue,
-                makerCut: saleData.makerCut,
-                shopProfit: saleData.shopProfit,
-                splitPercentage: item.makerPercent,
-                paid: false,
-                date: new Date().toISOString().slice(0, 10),
-                createdAt: serverTimestamp()
-            });
+            await runTransaction(db, async (tx) => {
+                // read authoritative consignment and inventory first
+                const consSnap = await tx.get(consignmentRef);
+                if (!consSnap.exists()) throw new Error("Consignment not found");
 
-            await updateDoc(doc(db, "consignments", item.id), {
-                quantitySold: nextSold,
-                quantityRemaining: nextRemaining,
-                status: nextRemaining <= 0 ? "Settled" : "Active",
-                updatedAt: serverTimestamp()
+                const invSnap = await tx.get(inventoryRef);
+
+                const currentSold = Number(consSnap.data().quantitySold || 0);
+                const currentRemaining = Number(consSnap.data().quantityRemaining || 0);
+                const computedNextSold = currentSold + saleData.quantitySold;
+                const computedNextRemaining = currentRemaining - saleData.quantitySold;
+
+                // create sale
+                tx.set(saleRef, {
+                    consignmentId: item.id,
+                    shopId: uid,
+                    shopName: currentShop.name,
+                    productId: item.productId,
+                    productName: item.product?.name || item.productName || "Unknown Product",
+                    makerId: item.makerId || item.product?.makerId,
+                    makerName: item.maker?.name || item.makerName || "Unknown Maker",
+                    quantitySold: saleData.quantitySold,
+                    retailPrice: Number(item.product?.retailPrice || (saleData.quantitySold ? saleData.totalRevenue / saleData.quantitySold : 0)),
+                    totalRevenue: saleData.totalRevenue,
+                    makerCut: saleData.makerCut,
+                    shopProfit: saleData.shopProfit,
+                    splitPercentage: item.makerPercent,
+                    paid: false,
+                    date: new Date().toISOString().slice(0, 10),
+                    createdAt: serverTimestamp()
+                });
+
+                // update consignment based on authoritative snapshot
+                tx.update(consignmentRef, {
+                    quantitySold: computedNextSold,
+                    quantityRemaining: computedNextRemaining,
+                    status: computedNextRemaining <= 0 ? "Settled" : "Active",
+                    updatedAt: serverTimestamp()
+                });
+
+                // update or create inventory
+                if (invSnap.exists()) {
+                    tx.update(inventoryRef, {
+                        quantitySold: computedNextSold,
+                        quantityRemaining: computedNextRemaining,
+                        status: computedNextRemaining <= 0 ? "Settled" : "Active",
+                        updatedAt: serverTimestamp()
+                    });
+                } else {
+                    tx.set(inventoryRef, {
+                        consignmentId: item.id,
+                        shopId: uid,
+                        shopName: currentShop.name,
+                        makerId: item.makerId || item.product?.makerId,
+                        makerName: item.maker?.name || item.makerName || "Unknown Maker",
+                        productId: item.productId,
+                        productName: item.product?.name || item.productName || "Unknown Product",
+                        productImageUrl: item.product?.imageUrl || item.product?.image || "",
+                        quantityRemaining: computedNextRemaining,
+                        quantitySold: computedNextSold,
+                        totalQuantity: computedNextRemaining + computedNextSold,
+                        makerPercent: Number(item.makerPercent ?? item.splitPercentage ?? 50),
+                        shopPercent: Number(item.shopPercent ?? 100 - (item.makerPercent ?? item.splitPercentage ?? 50)),
+                        status: computedNextRemaining <= 0 ? "Settled" : "Active",
+                        updatedAt: serverTimestamp(),
+                        createdAt: serverTimestamp()
+                    });
+                }
             });
 
             setSelectedSaleItem(null);
@@ -278,54 +384,77 @@ const ShopDashboard = () => {
     return (
         <div className="min-h-screen bg-[#F5F5F0]">
             <Navbar />
-            <div className="max-w-7xl mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-6">
-                <aside className="w-full lg:w-64 flex flex-col">
-                    <div className="bg-white rounded-[12px] border border-gray-200 p-4 mb-6">
-                        <h1 className="text-xl font-bold text-[#2D6A4F]">Local Lift</h1>
-                    </div>
 
-                    <nav className="bg-white rounded-[12px] border border-gray-200 p-3 mb-6 flex-1">
-                        <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-2">
-                            {navItems.map(item => (
-                                <li key={item.id}>
-                                    <button
-                                        type="button"
-                                        onClick={() => setActiveSection(item.id)}
-                                        className={`w-full flex items-center justify-between text-left px-3 py-3 rounded-lg transition text-sm font-medium ${activeSection === item.id ? "bg-[#2D6A4F] text-white" : "text-gray-700 hover:bg-gray-100"}`}
-                                    >
-                                        <span>{item.label}</span>
-                                        {item.badge > 0 && <span className="ml-2 rounded-full bg-[#F4A261] px-2 py-0.5 text-xs font-bold text-white">{item.badge}</span>}
-                                    </button>
-                                </li>
-                            ))}
-                        </ul>
-                    </nav>
+            {/* Show profile form if needed */}
+            {showProfileForm && (
+                <ProfileForm
+                    role="shopkeeper"
+                    initialData={userDoc || {}}
+                    onSave={saveProfileData}
+                    isSaving={isSavingProfile}
+                    message="Complete your shop profile to get started"
+                    onCancel={null}
+                />
+            )}
 
-                    <div className="bg-white rounded-[12px] border border-gray-200 p-4">
-                        <div className="flex items-center gap-3 mb-3">
-                            <img src={currentShop.photoUrl} alt={currentShop.name} className="w-12 h-12 rounded-full bg-gray-100" />
-                            <div>
-                                <p className="font-bold text-gray-900">{currentShop.name}</p>
-                                <p className="text-xs text-gray-600">{currentShop.location}</p>
+            {/* Show dashboard if profile is complete */}
+            {!showProfileForm && (
+                <div className="max-w-7xl mx-auto p-4 sm:p-6 flex flex-col lg:flex-row gap-6">
+                    <aside className="w-full lg:w-64 flex flex-col">
+                        <div className="bg-white rounded-[12px] border border-gray-200 p-4 mb-6">
+                            <h1 className="text-xl font-bold text-[#2D6A4F]">Local Lift</h1>
+                        </div>
+
+                        <nav className="bg-white rounded-[12px] border border-gray-200 p-3 mb-6 flex-1">
+                            <ul className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-1 gap-2">
+                                {navItems.map(item => (
+                                    <li key={item.id}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveSection(item.id)}
+                                            className={`w-full flex items-center justify-between text-left px-3 py-3 rounded-lg transition text-sm font-medium ${activeSection === item.id ? "bg-[#2D6A4F] text-white" : "text-gray-700 hover:bg-gray-100"}`}
+                                        >
+                                            <span>{item.label}</span>
+                                            {item.badge > 0 && <span className="ml-2 rounded-full bg-[#F4A261] px-2 py-0.5 text-xs font-bold text-white">{item.badge}</span>}
+                                        </button>
+                                    </li>
+                                ))}
+                            </ul>
+                        </nav>
+
+                        <div className="bg-white rounded-[12px] border border-gray-200 p-4">
+                            <div className="flex items-center gap-3 mb-3">
+                                <img src={currentShop.photoUrl} alt={currentShop.name} className="w-12 h-12 rounded-full bg-gray-100" />
+                                <div>
+                                    <p className="font-bold text-gray-900">{currentShop.name}</p>
+                                    <p className="text-xs text-gray-600">{currentShop.location}</p>
+                                    <p className="text-xs text-gray-500">{currentShop.businessName}</p>
+                                </div>
                             </div>
+                            <button
+                                type="button"
+                                onClick={() => setShowProfileForm(true)}
+                                className="w-full px-3 py-2 border border-[#2D6A4F] text-[#2D6A4F] rounded-lg hover:bg-[#f0f5f3] transition font-medium text-sm"
+                            >
+                                Edit Profile
+                            </button>
                         </div>
-                        <button className="w-full px-3 py-2 border border-[#2D6A4F] text-[#2D6A4F] rounded-lg hover:bg-[#f0f5f3] transition font-medium text-sm">
-                            Edit Profile
-                        </button>
-                    </div>
-                </aside>
+                    </aside>
 
-                <main className="flex-1 space-y-6">
-                    {dataError && <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">{dataError}</div>}
-                    {actionError && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>}
-                    {activeSection !== "dashboard" && !isLoading && <ShopStatsBar inventory={inventory} pendingRequests={pendingRequests} sales={shopSales} amountOwed={amountOwed} />}
-                    {isLoading ? (
-                        <div className="bg-white rounded-[12px] border border-gray-200 p-10 text-center text-gray-500">
-                            Loading shopkeeper data...
-                        </div>
-                    ) : renderSection()}
-                </main>
-            </div>
+                    <main className="flex-1 space-y-6">
+                        {dataError && <div className="rounded-lg border border-yellow-200 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">{dataError}</div>}
+                        {profileSaveMessage && <div className="rounded-lg border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-700">{profileSaveMessage}</div>}
+                        {profileSaveError && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{profileSaveError}</div>}
+                        {actionError && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{actionError}</div>}
+                        {activeSection !== "dashboard" && !isLoading && <ShopStatsBar inventory={inventory} pendingRequests={pendingRequests} sales={shopSales} amountOwed={amountOwed} />}
+                        {isLoading ? (
+                            <div className="bg-white rounded-[12px] border border-gray-200 p-10 text-center text-gray-500">
+                                Loading shopkeeper data...
+                            </div>
+                        ) : renderSection()}
+                    </main>
+                </div>
+            )}
 
             {selectedSaleItem && (
                 <LogSaleModal
