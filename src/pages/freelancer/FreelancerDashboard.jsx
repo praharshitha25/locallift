@@ -342,7 +342,7 @@ const FreelancerDashboard = () => {
                     onSave={saveProfileData}
                     isSaving={isSavingProfile}
                     message="Complete your profile to get started"
-                    onCancel={null}
+                    onCancel={() => setShowProfileForm(false)}
                 />
             )}
 

@@ -41,6 +41,31 @@ const AddProductModal = ({ makerId, onClose, onSubmit }) => {
         setError("");
 
         if (!formData.name || !formData.wholesalePrice || !formData.retailPrice || !formData.quantity) {
+            setError("All required fields must be filled.");
+            return;
+        }
+
+        const quantity = Number(formData.quantity);
+        const wholesale = Number(formData.wholesalePrice);
+        const retail = Number(formData.retailPrice);
+
+        if (quantity <= 0) {
+            setError("Quantity must be greater than 0.");
+            return;
+        }
+
+        if (wholesale <= 0) {
+            setError("Wholesale price must be greater than 0.");
+            return;
+        }
+
+        if (retail <= 0) {
+            setError("Retail price must be greater than 0.");
+            return;
+        }
+
+        if (retail < wholesale) {
+            setError("Retail price must be greater than or equal to wholesale price.");
             return;
         }
 

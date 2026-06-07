@@ -11,8 +11,9 @@ import SettlementSummary from "./components/SettlementSummary";
 import ShelfInventory from "./components/ShelfInventory";
 import ShopFreelancerDirectory from "./components/ShopFreelancerDirectory";
 import ShopStatsBar from "./components/ShopStatsBar";
+import MakerDiscovery from "./components/MakerDiscovery";
 import { enrichConsignment, sameId } from "./components/shopDataHelpers";
-import { createInventoryForConsignment, updateInventorySale } from "../../firebase/dbHelpers";
+import { createInventoryForConsignment, updateInventorySale, markSalesAsPaid } from "../../firebase/dbHelpers";
 
 const ShopDashboard = () => {
     const { currentUser, userDoc } = useAuth();
@@ -23,7 +24,8 @@ const ShopDashboard = () => {
         email: userDoc?.email || currentUser?.email || "",
         location: userDoc?.location || "Kurnool",
         businessName: userDoc?.shopName || userDoc?.name || "Your Shop",
-        photoUrl: userDoc?.photoURL || userDoc?.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc?.name || "Shop")}&background=2D6A4F&color=fff`
+        photoUrl: userDoc?.photoURL || userDoc?.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc?.name || "Shop")}&background=2D6A4F&color=fff`,
+        coverImageUrl: userDoc?.coverImageURL || userDoc?.coverImageUrl || userDoc?.coverImage || ""
     };
 
     const shopQuery = useMemo(() => uid ? [where("shopId", "==", uid)] : emptyConstraints, [uid]);
@@ -33,7 +35,6 @@ const ShopDashboard = () => {
     const [activeSection, setActiveSection] = useState("dashboard");
     const [selectedSaleItem, setSelectedSaleItem] = useState(null);
     const [actionError, setActionError] = useState("");
-    const [paidSaleIds, setPaidSaleIds] = useState([]);
     const [showProfileForm, setShowProfileForm] = useState(false);
     const [isSavingProfile, setIsSavingProfile] = useState(false);
     const [profileSaveMessage, setProfileSaveMessage] = useState("");
@@ -55,12 +56,12 @@ const ShopDashboard = () => {
     );
 
     const pendingRequests = enrichedConsignments.filter(item => item.status === "Pending");
-    const connectedMakers = enrichedConsignments.filter(item => item.requestType === "connection" && item.status === "Connected");
+    const connectionRequestsList = enrichedConsignments.filter(item => item.requestType === "connection");
+    const connectedMakers = connectionRequestsList.filter(item => item.status === "Connected");
     const inventory = enrichedConsignments.filter(item => item.status === "Active");
-    const paidSaleIdSet = useMemo(() => new Set(paidSaleIds.map(String)), [paidSaleIds]);
     const shopSales = salesDocs.map(sale => ({
         ...sale,
-        paid: Boolean(sale.paid) || paidSaleIdSet.has(String(sale.id))
+        paid: Boolean(sale.paid)
     }));
     const dataError = consignmentError || productError || salesError || makerError || freelancerError;
     const isLoading = consignmentLoading || productLoading || salesLoading || makerLoading || freelancerLoading;
@@ -274,13 +275,7 @@ const ShopDashboard = () => {
         setActionError("");
 
         try {
-            const paidIds = row.saleIds.map(String);
-            setPaidSaleIds(prev => [...new Set([...prev.map(String), ...paidIds])]);
-
-            await Promise.all(row.saleIds.map((saleId) => updateDoc(doc(db, "sales", saleId), {
-                paid: true,
-                paidAt: serverTimestamp()
-            })));
+            await markSalesAsPaid(row.saleIds);
         } catch (err) {
             setActionError(err.message || "Could not mark payout as paid.");
         }
@@ -311,10 +306,43 @@ const ShopDashboard = () => {
         }
     };
 
+    const handleConnectMaker = async (maker) => {
+        setActionError("");
+        const existingRequest = connectionRequestsList.find(request => (
+            String(request.makerId) === String(maker.id) && request.status !== "Rejected"
+        ));
+
+        if (existingRequest) {
+            return true;
+        }
+
+        try {
+            await addDoc(collection(db, "consignments"), {
+                requestType: "connection",
+                shopId: uid,
+                shopName: currentShop.name,
+                makerId: maker.id,
+                makerName: maker.brandName || maker.name || "Maker",
+                status: "Pending",
+                quantityDropped: 0,
+                quantitySold: 0,
+                quantityRemaining: 0,
+                splitPercentage: 50,
+                droppedOn: new Date().toISOString().slice(0, 10),
+                createdAt: serverTimestamp()
+            });
+            return true;
+        } catch (err) {
+            setActionError(err.message || "Could not send maker connection request.");
+            return false;
+        }
+    };
+
     const navItems = [
         { id: "dashboard", label: "Dashboard" },
         { id: "requests", label: "Incoming Requests", badge: pendingRequests.length },
         { id: "makers", label: "Connected Makers", badge: connectedMakers.length },
+        { id: "browse", label: "Find Makers" },
         { id: "inventory", label: "Shelf Inventory" },
         { id: "settlement", label: "Settlement" },
         { id: "freelancers", label: "Hire Freelancer" }
@@ -335,6 +363,13 @@ const ShopDashboard = () => {
                 return <IncomingRequests requests={pendingRequests} onAccept={handleAccept} onReject={handleReject} />;
             case "makers":
                 return renderConnectedMakers();
+            case "browse":
+                return (
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-6">Find Makers</h2>
+                        <MakerDiscovery makers={makerDocs} products={productDocs} relationships={connectionRequestsList} onSendRequest={handleConnectMaker} />
+                    </div>
+                );
             case "inventory":
             case "sale":
                 return <ShelfInventory inventory={inventory} onLogSale={setSelectedSaleItem} />;
@@ -393,7 +428,7 @@ const ShopDashboard = () => {
                     onSave={saveProfileData}
                     isSaving={isSavingProfile}
                     message="Complete your shop profile to get started"
-                    onCancel={null}
+                    onCancel={() => setShowProfileForm(false)}
                 />
             )}
 
@@ -422,22 +457,32 @@ const ShopDashboard = () => {
                             </ul>
                         </nav>
 
-                        <div className="bg-white rounded-[12px] border border-gray-200 p-4">
-                            <div className="flex items-center gap-3 mb-3">
-                                <img src={currentShop.photoUrl} alt={currentShop.name} className="w-12 h-12 rounded-full bg-gray-100" />
-                                <div>
-                                    <p className="font-bold text-gray-900">{currentShop.name}</p>
-                                    <p className="text-xs text-gray-600">{currentShop.location}</p>
-                                    <p className="text-xs text-gray-500">{currentShop.businessName}</p>
+                        <div className="bg-white rounded-[12px] border border-gray-200 overflow-hidden">
+                            {currentShop.coverImageUrl ? (
+                                <div
+                                    className="h-28 bg-cover bg-center"
+                                    style={{ backgroundImage: `url(${currentShop.coverImageUrl})` }}
+                                />
+                            ) : (
+                                <div className="h-28 bg-gradient-to-br from-[#2D6A4F] to-[#1f4d37]" />
+                            )}
+                            <div className="p-4">
+                                <div className="flex items-center gap-3 mb-3">
+                                    <img src={currentShop.photoUrl} alt={currentShop.name} className="w-12 h-12 rounded-full bg-gray-100" />
+                                    <div>
+                                        <p className="font-bold text-gray-900">{currentShop.name}</p>
+                                        <p className="text-xs text-gray-600">{currentShop.location}</p>
+                                        <p className="text-xs text-gray-500">{currentShop.businessName}</p>
+                                    </div>
                                 </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowProfileForm(true)}
+                                    className="w-full px-3 py-2 border border-[#2D6A4F] text-[#2D6A4F] rounded-lg hover:bg-[#f0f5f3] transition font-medium text-sm"
+                                >
+                                    Edit Profile
+                                </button>
                             </div>
-                            <button
-                                type="button"
-                                onClick={() => setShowProfileForm(true)}
-                                className="w-full px-3 py-2 border border-[#2D6A4F] text-[#2D6A4F] rounded-lg hover:bg-[#f0f5f3] transition font-medium text-sm"
-                            >
-                                Edit Profile
-                            </button>
                         </div>
                     </aside>
 

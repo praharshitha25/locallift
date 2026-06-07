@@ -12,6 +12,7 @@ import ConsignmentTable from "./components/ConsignmentTable";
 import LogDropoffModal from "./components/LogDropoffModal";
 import EarningsSummary from "./components/EarningsSummary";
 import ShopDiscovery from "./components/ShopDiscovery";
+import MakerIncomingRequests from "./components/MakerIncomingRequests";
 import FreelancerDirectory from "./components/FreelancerDirectory";
 import SidebarNav from "./components/SidebarNav";
 
@@ -25,7 +26,8 @@ const MakerDashboard = () => {
         location: userDoc?.location || "Kurnool",
         businessName: userDoc?.brandName || userDoc?.name || "Maker",
         rating: userDoc?.rating || "New",
-        photoUrl: userDoc?.photoURL || userDoc?.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc?.name || "Maker")}&background=2D6A4F&color=fff`
+        photoUrl: userDoc?.photoURL || userDoc?.photoUrl || `https://ui-avatars.com/api/?name=${encodeURIComponent(userDoc?.name || "Maker")}&background=2D6A4F&color=fff`,
+        coverImageUrl: userDoc?.coverImageURL || userDoc?.coverImageUrl || userDoc?.coverImage || ""
     };
 
     const makerQuery = useMemo(() => uid ? [where("makerId", "==", uid)] : emptyConstraints, [uid]);
@@ -45,8 +47,22 @@ const MakerDashboard = () => {
         [consignmentsList]
     );
     const connectionRequestsList = useMemo(
-        () => consignmentsList.filter(consignment => consignment.requestType === "connection"),
-        [consignmentsList]
+        () => consignmentsList
+            .filter(consignment => consignment.requestType === "connection")
+            .map(request => ({
+                ...request,
+                shop: shopsList.find(shop => String(shop.id) === String(request.shopId)) || {
+                    id: request.shopId,
+                    name: request.shopName,
+                    location: request.shopLocation || "",
+                    type: request.shopType || ""
+                }
+            })),
+        [consignmentsList, shopsList]
+    );
+    const pendingConnectionRequests = useMemo(
+        () => connectionRequestsList.filter(request => request.status === "Pending"),
+        [connectionRequestsList]
     );
     const connectedShopsList = useMemo(
         () => shopsList.filter(shop => connectionRequestsList.some(request => (
@@ -260,6 +276,36 @@ const MakerDashboard = () => {
         }
     };
 
+    const handleAcceptConnectionRequest = async (request) => {
+        setActionError("");
+
+        try {
+            await updateDoc(doc(db, "consignments", request.id), {
+                status: "Connected",
+                acceptedAt: serverTimestamp()
+            });
+            return true;
+        } catch (err) {
+            setActionError(err.message || "Could not accept connection request.");
+            return false;
+        }
+    };
+
+    const handleRejectConnectionRequest = async (request) => {
+        setActionError("");
+
+        try {
+            await updateDoc(doc(db, "consignments", request.id), {
+                status: "Rejected",
+                rejectedAt: serverTimestamp()
+            });
+            return true;
+        } catch (err) {
+            setActionError(err.message || "Could not reject connection request.");
+            return false;
+        }
+    };
+
     const renderSection = () => {
         const openDropoffModal = () => {
             if (connectedShopsList.length === 0) {
@@ -281,6 +327,29 @@ const MakerDashboard = () => {
                 return (
                     <div className="space-y-6">
                         <StatsBar products={productsList} consignments={productConsignmentsList} sales={makerSales} />
+
+                        <div className="bg-white rounded-[12px] border border-gray-200 p-6 shadow-sm">
+                            <div className="flex items-center justify-between mb-4">
+                                <div>
+                                    <h2 className="text-xl font-bold text-gray-900">Connected Shops</h2>
+                                    <p className="text-sm text-gray-500">Your active shop relationships are shown here.</p>
+                                </div>
+                                <span className="text-sm font-semibold text-[#2D6A4F]">{connectedShopsList.length} connected</span>
+                            </div>
+                            {connectedShopsList.length === 0 ? (
+                                <div className="text-center py-10 text-gray-500">No connected shops yet. Accept a request or send a new shop request.</div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {connectedShopsList.map(shop => (
+                                        <div key={shop.id} className="rounded-lg border border-gray-200 p-4 bg-gray-50">
+                                            <p className="font-semibold text-gray-900">{shop.name || shop.shopName || "Shopkeeper"}</p>
+                                            <p className="text-sm text-gray-600">{shop.location || shop.email || "Location unknown"}</p>
+                                            <p className="text-sm text-gray-500">{shop.type || shop.shopCategory || "Shopkeeper"}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
 
                         <div>
                             <div className="flex justify-between items-center mb-4">
@@ -336,6 +405,17 @@ const MakerDashboard = () => {
                         <EarningsSummary sales={makerSales} />
                     </div>
                 );
+            case "requests":
+                return (
+                    <div>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-6">Incoming Requests</h2>
+                        <MakerIncomingRequests
+                            requests={pendingConnectionRequests}
+                            onAccept={handleAcceptConnectionRequest}
+                            onReject={handleRejectConnectionRequest}
+                        />
+                    </div>
+                );
             case "shops":
                 return (
                     <div>
@@ -371,7 +451,7 @@ const MakerDashboard = () => {
                     onSave={saveProfileData}
                     isSaving={isSavingProfile}
                     message="Complete your profile to get started"
-                    onCancel={null}
+                    onCancel={() => setShowProfileForm(false)}
                 />
             )}
 

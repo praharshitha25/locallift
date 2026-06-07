@@ -1,7 +1,16 @@
 import { Link } from "react-router-dom";
 
 const SettlementSummary = ({ settlements, sales, onMarkPaid }) => {
-    const totalRevenue = sales.reduce((sum, sale) => sum + Number(sale.totalRevenue || Number(sale.makerCut || 0) * 2), 0);
+    // Calculate total revenue correctly from actual sales data
+    const totalRevenue = sales.reduce((sum, sale) => {
+        // Use totalRevenue if available, otherwise calculate from quantitySold * retailPrice
+        let revenue = Number(sale.totalRevenue || 0);
+        if (revenue === 0 && sale.quantitySold && sale.retailPrice) {
+            revenue = Number(sale.quantitySold) * Number(sale.retailPrice);
+        }
+        return sum + revenue;
+    }, 0);
+
     const totalOwed = settlements.reduce((sum, settlement) => sum + (settlement.paid ? 0 : settlement.amountOwed), 0);
     const netProfit = totalRevenue - totalOwed;
 

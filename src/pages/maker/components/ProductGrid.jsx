@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { uploadToCloudinary } from "../../../lib/cloudinary";
 
 const fallbackImage = (product) => {
     const label = encodeURIComponent(product?.category || "Product");
@@ -10,10 +11,15 @@ const fallbackImage = (product) => {
 const ProductGrid = ({ products, onDelete, onEdit }) => {
     const [editingId, setEditingId] = useState(null);
     const [editData, setEditData] = useState({});
+    const [editImageFile, setEditImageFile] = useState(null);
+    const [editImagePreview, setEditImagePreview] = useState("");
+    const [isSaving, setIsSaving] = useState(false);
 
     const handleEdit = (product) => {
         setEditingId(product.id);
         setEditData(product);
+        setEditImageFile(null);
+        setEditImagePreview(product.imageUrl || product.image || product.photoUrl || "");
     };
 
     const handleEditChange = (e) => {
@@ -24,14 +30,38 @@ const ProductGrid = ({ products, onDelete, onEdit }) => {
         }));
     };
 
-    const handleSaveEdit = () => {
-        onEdit({
-            ...editData,
-            wholesalePrice: Number(editData.wholesalePrice) || 0,
-            retailPrice: Number(editData.retailPrice) || 0,
-            quantity: Number(editData.quantity) || 0
-        });
-        setEditingId(null);
+    const handleEditImageChange = (e) => {
+        const file = e.target.files?.[0];
+        if (file) {
+            setEditImageFile(file);
+            setEditImagePreview(URL.createObjectURL(file));
+        }
+    };
+
+    const handleSaveEdit = async () => {
+        setIsSaving(true);
+        try {
+            let imageUrl = editData.imageUrl || editData.image || editData.photoUrl;
+
+            if (editImageFile) {
+                imageUrl = await uploadToCloudinary(editImageFile);
+            }
+
+            onEdit({
+                ...editData,
+                imageUrl,
+                wholesalePrice: Number(editData.wholesalePrice) || 0,
+                retailPrice: Number(editData.retailPrice) || 0,
+                quantity: Number(editData.quantity) || 0
+            });
+            setEditingId(null);
+            setEditImageFile(null);
+            setEditImagePreview("");
+        } catch (err) {
+            console.error("Error saving product:", err);
+        } finally {
+            setIsSaving(false);
+        }
     };
 
     if (products.length === 0) {
@@ -90,6 +120,18 @@ const ProductGrid = ({ products, onDelete, onEdit }) => {
                                         className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-[#2D6A4F]"
                                         aria-label="Product description"
                                     />
+                                    <div className="space-y-1">
+                                        <label className="block text-xs font-medium text-gray-600">Product Image</label>
+                                        {editImagePreview && (
+                                            <div className="w-full h-24 rounded bg-gray-100 overflow-hidden mb-2">
+                                                <img src={editImagePreview} alt="Product" className="w-full h-full object-cover" />
+                                            </div>
+                                        )}
+                                        <label className="cursor-pointer inline-flex items-center gap-1 px-2 py-1 text-xs border border-gray-300 rounded hover:bg-gray-50 bg-white">
+                                            Upload Image
+                                            <input type="file" accept="image/*" className="sr-only" onChange={handleEditImageChange} />
+                                        </label>
+                                    </div>
                                     <div className="grid grid-cols-3 gap-2">
                                         <input
                                             name="wholesalePrice"
@@ -118,14 +160,18 @@ const ProductGrid = ({ products, onDelete, onEdit }) => {
                                     </div>
                                     <div className="flex gap-2 pt-3 border-t border-gray-200">
                                         <button
+                                            type="button"
                                             onClick={handleSaveEdit}
-                                            className="flex-1 px-3 py-2 text-sm bg-[#2D6A4F] text-white rounded-lg hover:bg-[#24563f] transition font-medium"
+                                            disabled={isSaving}
+                                            className="flex-1 px-3 py-2 text-sm bg-[#2D6A4F] text-white rounded-lg hover:bg-[#24563f] disabled:bg-gray-400 transition font-medium"
                                         >
-                                            Save
+                                            {isSaving ? "Saving..." : "Save"}
                                         </button>
                                         <button
+                                            type="button"
                                             onClick={() => setEditingId(null)}
-                                            className="flex-1 px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition font-medium"
+                                            disabled={isSaving}
+                                            className="flex-1 px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:bg-gray-100 transition font-medium"
                                         >
                                             Cancel
                                         </button>

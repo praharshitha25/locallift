@@ -14,7 +14,9 @@ const idProofOptions = {
 const ProfileModal = ({ role, isOpen, initialData, onClose, onSave, message, isSaving }) => {
     const [formData, setFormData] = useState({});
     const [photoFile, setPhotoFile] = useState(null);
+    const [coverFile, setCoverFile] = useState(null);
     const [photoPreview, setPhotoPreview] = useState("");
+    const [coverPreview, setCoverPreview] = useState("");
     const [error, setError] = useState("");
 
     useEffect(() => {
@@ -40,10 +42,15 @@ const ProfileModal = ({ role, isOpen, initialData, onClose, onSave, message, isS
             portfolioWebsite: initialData?.portfolioWebsite || "",
             instagramHandle: initialData?.instagramHandle || "",
             photoURL: initialData?.photoURL || initialData?.photoUrl || "",
-            photoUrl: initialData?.photoURL || initialData?.photoUrl || ""
+            photoUrl: initialData?.photoURL || initialData?.photoUrl || "",
+            coverImageURL: initialData?.coverImageURL || initialData?.coverImageUrl || initialData?.coverImage || "",
+            coverImageUrl: initialData?.coverImageURL || initialData?.coverImageUrl || initialData?.coverImage || "",
+            coverImage: initialData?.coverImageURL || initialData?.coverImageUrl || initialData?.coverImage || ""
         });
         setPhotoFile(null);
+        setCoverFile(null);
         setPhotoPreview(initialData?.photoURL || initialData?.photoUrl || "");
+        setCoverPreview(initialData?.coverImageURL || initialData?.coverImageUrl || initialData?.coverImage || "");
         setError("");
     }, [isOpen, initialData]);
 
@@ -78,30 +85,55 @@ const ProfileModal = ({ role, isOpen, initialData, onClose, onSave, message, isS
         }
     };
 
+    const handleCoverChange = (event) => {
+        const file = event.target.files?.[0] || null;
+        if (file) {
+            setCoverFile(file);
+            setCoverPreview(URL.createObjectURL(file));
+        }
+    };
+
     const handleSubmit = async (event) => {
         event.preventDefault();
         setError("");
 
-        if (!formData.name.trim() || !formData.phone.trim()) {
+        const phone = formData.phone.trim();
+        const phoneRegex = /^[0-9]{10}$/;
+
+        if (!formData.name.trim() || !phone) {
             setError("Name and phone are required.");
+            return;
+        }
+
+        if (!phoneRegex.test(phone)) {
+            setError("Phone must be a valid 10-digit number.");
             return;
         }
 
         try {
             let uploadedPhotoUrl = formData.photoURL || formData.photoUrl || "";
+            let uploadedCoverUrl = formData.coverImageURL || formData.coverImageUrl || formData.coverImage || "";
+
             if (photoFile) {
                 uploadedPhotoUrl = await uploadToCloudinary(photoFile);
             }
 
+            if (coverFile) {
+                uploadedCoverUrl = await uploadToCloudinary(coverFile);
+            }
+
             const profileData = {
                 name: formData.name.trim(),
-                phone: formData.phone.trim(),
+                phone,
                 location: formData.location.trim(),
                 upiId: formData.upiId.trim(),
                 idProofType: formData.idProofType,
                 idProofNumber: formData.idProofNumber.trim(),
                 photoURL: uploadedPhotoUrl,
                 photoUrl: uploadedPhotoUrl,
+                coverImageURL: uploadedCoverUrl,
+                coverImageUrl: uploadedCoverUrl,
+                coverImage: uploadedCoverUrl,
                 profileComplete: true
             };
 
@@ -150,6 +182,21 @@ const ProfileModal = ({ role, isOpen, initialData, onClose, onSave, message, isS
 
                 <form onSubmit={handleSubmit} className="space-y-6 px-6 py-6">
                     {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-gray-700">Cover Image</label>
+                        <div className="overflow-hidden rounded-[12px] bg-gray-100">
+                            {coverPreview ? (
+                                <img src={coverPreview} alt="Cover preview" className="w-full h-32 object-cover" />
+                            ) : (
+                                <div className="flex h-32 items-center justify-center text-gray-400 text-sm">Upload a cover image</div>
+                            )}
+                        </div>
+                        <label className="cursor-pointer inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 hover:bg-gray-50">
+                            Upload Cover
+                            <input type="file" accept="image/*" className="sr-only" onChange={handleCoverChange} />
+                        </label>
+                    </div>
 
                     <div className="grid gap-6 sm:grid-cols-2">
                         <div className="space-y-2">

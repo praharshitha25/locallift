@@ -1,14 +1,18 @@
 import { useEffect, useMemo } from "react";
+import { useNavigate, Link } from "react-router-dom";
 import { where } from "firebase/firestore";
-import { useAuth } from "../auth/AuthContext";
+import { getDashboardPath, useAuth } from "../auth/AuthContext";
+import Navbar from "../components/Navbar";
 import { useCollection, emptyConstraints } from "../firebase/firestoreHooks";
 
 const formatDate = (date) => date.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
 
 const Settlement = () => {
     const { currentUser, userDoc } = useAuth();
+    const navigate = useNavigate();
     const uid = currentUser?.uid;
     const role = userDoc?.role;
+    const dashboardPath = getDashboardPath(role);
 
     const salesQuery = useMemo(() => {
         if (!uid) return emptyConstraints;
@@ -89,7 +93,29 @@ const Settlement = () => {
                 }
             `}</style>
 
+            <Navbar />
+
             <main className="max-w-6xl mx-auto bg-white rounded-[12px] border border-gray-200 p-6 sm:p-8 shadow-sm print:shadow-none print:border-0">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6 no-print">
+                    <div className="flex flex-wrap items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => navigate(-1)}
+                            className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition"
+                        >
+                            Back
+                        </button>
+                        <Link
+                            to={dashboardPath}
+                            className="rounded-full border border-[#2D6A4F] px-4 py-2 text-sm font-medium text-[#2D6A4F] hover:bg-[#E8F5EC] transition"
+                        >
+                            Go to Dashboard
+                        </Link>
+                    </div>
+                    <button onClick={() => window.print()} className="no-print px-4 py-2 bg-[#2D6A4F] text-white rounded-lg hover:bg-[#24563f] transition font-medium">
+                        Print
+                    </button>
+                </div>
                 <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 border-b border-gray-200 pb-6 mb-6">
                     <div>
                         <h1 className="text-3xl font-bold text-[#2D6A4F] print:text-black">Local Lift</h1>

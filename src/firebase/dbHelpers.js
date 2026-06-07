@@ -103,3 +103,16 @@ export const recordSettlement = async ({ saleIds, shopId, shopName, makerId, mak
         createdAt: serverTimestamp()
     });
 };
+
+export const markSalesAsPaid = async (saleIds) => {
+    if (!Array.isArray(saleIds) || saleIds.length === 0) return;
+
+    const updatePromises = saleIds.map(saleId =>
+        updateDoc(doc(db, "sales", saleId), {
+            paid: true,
+            paidAt: serverTimestamp()
+        })
+    );
+
+    await Promise.all(updatePromises);
+};
